@@ -1,0 +1,193 @@
+#+TITLE: Objects in Python
+
+After this chapter, we will understand the following:
+
+- How to create classes and instantiate objects in Python
+- How to add attributes and behaviors to Python objects
+- How to organize classes into packages and modules
+- How to suggest that people don't clobber our data
+
+* Creating Python Classes
+
+#+BEGIN_SRC python
+class MyFirstClass:
+    pass
+
+
+a, b = MyFirstClass(), MyFirstClass()
+#+END_SRC
+
+* Adding Attributes
+
+#+BEGIN_SRC python
+class Point:
+    pass
+
+p1, p2 = Point(), Point()
+
+p1.x, p1.y = 5, 4
+p2.x, p2.y = 3, 6
+#+END_SRC
+
+* Making it do Something
+
+#+BEGIN_SRC python
+class Point:
+    def reset(self):
+        self.x = 0
+        self.y = 0
+
+p = Point()
+p.reset()
+print(p.x, p.y)
+#+END_SRC
+
+* More Arguments
+
+#+BEGIN_SRC python
+import math
+
+class Point:
+    def move(self, x, y):
+        self.x = x
+        self.y = y
+
+    def reset(self):
+        self.move(0, 0)
+
+    def calculate_distance(self, other_point):
+        return math.sqrt(
+            (self.x - other_point.x) ** 2
+            + (self.y - other_point.y) ** 2
+        )
+
+p1, p2 = Point(), Point()
+
+p1.reset()
+p2.move(5, 0)
+print(p2.calculate_distance(p1))
+assert p2.calculate_distance(p1) == p1.calculate_distance(p2)
+p1.move(3, 4)
+print(p1.calculate_distance(p2))
+print(p1.calculate_distance(p1))
+#+END_SRC
+
+* Initializing the Object
+
+#+BEGIN_SRC python
+point = Point()
+point.x = 5
+print(point.x)
+print(point.y)
+
+class Point:
+    def __init__(self, x=0, y=0):
+        self.move(x, y)
+
+    def move(self, x, y):
+        self.x = x
+        self.y = y
+
+    def reset(self):
+        self.move(0, 0)
+
+point = Point(3, 5)
+print(point.x, point.y)
+#+END_SRC
+
+* Explaining Yourself
+
+#+BEGIN_SRC python
+import math
+
+class Point:
+    "Represents a point in 2-D geometric coordinates"
+
+    def __init__(self, x=0, y=0):
+        """
+        Initialize the position of a new point.
+        The x and y coordinates can be specified.
+        If they aren't, the point defaults to the origin (0, 0)
+        """
+        self.move(x, y)
+
+    def move(self, x, y):
+        """Move the point to a new location in 2D space"""
+        self.x = x
+        self.y = y
+
+    def reset(self):
+        """Reset the point back to the origin (0, 0)"""
+        self.move(0, 0)
+
+    def calculate_distance(self, other_point):
+        """
+        Calculate the distance from this point to a
+        second point passed as a parameter.
+        Uses the distance function for Euclidean space.
+        Returns a float
+        """
+        return math.sqrt(
+            (self.x - other.point.x)
+            + (self.y - other_point.y)
+        )
+#+END_SRC
+
+* Case Study
+
+We will be building a simple command-line notebook application.
+
+#+DOWNLOADED: /tmp/screenshot.png @ 2021-05-23 12:45:03
+[[file:Case Study/screenshot_2021-05-23_12-45-03.png]]
+
+Here is our file directory setup:
+- parent_directory/
+    - notebook.py
+    - menu.py
+    - command_option.py
+
+#+BEGIN_SRC python :tangle notebook_app/src/notebook.py
+import datetime
+
+# store the next available id for all new notes
+LAST_ID = 0
+
+class Note:
+    """
+    Represent a note in the notebook. Match against a string and store tags for each note.
+    """
+    def __init__(self, memo, tags=""):
+        """
+        Initialize a note with memo and optional space separated tags.
+        Automatically set the note's creation date and unique ID
+        """
+        self.memo = memo
+        self.tags = tags
+        self.creation_date = datetime.date.today()
+        global LAST_ID
+        LAST_ID += 1
+        self.id = LAST_ID
+
+    def match(self, filter):
+        """
+        Determine if this note matches the filter text.
+        Return true if it matches, False otherwise.
+        Search is case sensitive and matches both text and tags.
+        """
+        return filter in self.memo or filter in self.tags
+#+END_SRC
+
+#+BEGIN_SRC python :tangle notebook_app/tests/test_notebook.py
+import pytest
+from src.notebook import Note
+
+# global vars
+N1 = Note("Hello First")
+N2 = Note("Hello Again")
+
+def test_id_is_incrementing():
+    assert N1.id == 1 and N2.id == 2
+
+def test_match_finding_words():
+    assert N1.match("First") and not N2.match("Second")
+#+END_SRC

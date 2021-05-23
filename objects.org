@@ -146,6 +146,8 @@ Here is our file directory setup:
     - menu.py
     - command_option.py
 
+* src
+
 #+BEGIN_SRC python :tangle notebook_app/src/notebook.py
 import datetime
 
@@ -175,19 +177,166 @@ class Note:
         Search is case sensitive and matches both text and tags.
         """
         return filter in self.memo or filter in self.tags
+
+class Notebook:
+    """Represent a collection of notes that can be tagged, modified, and searched"""
+    def __init__(self):
+        """Initialize a notebook with an empty list"""
+        self.notes = []
+
+    def new_note(self, memo, tags=""):
+        """Create a new note and add it to the list"""
+        self.notes.append(Note(memo, tags))
+
+    def _find_note(self, note_id):
+        """Locate the note with the given id"""
+        for note in self.notes:
+            if str(note.id) == str(note_id):
+                return note
+        print(f"Note id: {note_id} not found!")
+        return None
+
+    def modify_memo(self, note_id, memo):
+        """
+        Find the note with the given id and change its
+        memo to the given value.
+        """
+        note = self._find_note(note_id)
+        if note:
+            note.memo = memo
+            return True
+        return False
+
+    def modify_tags(self, note_id, tags):
+        """Find the note with the given id and change its tags to the given value"""
+        self._find_note(note_id).tags = tags
+
+    def search(self, filter):
+        """
+        Find all notes that match the given filter string.
+        """
+        return [note for note in self.notes if note.match(filter)]
 #+END_SRC
 
-#+BEGIN_SRC python :tangle notebook_app/tests/test_notebook.py
+#+BEGIN_SRC python :tangle notebook_app/src/menu.py
+import sys
+from notebook import Notebook
+
+class Menu:
+    """Display a menu and respond to choices when run"""
+    def __init__(self):
+        self.notebook = Notebook()
+        self.choices = {
+            "1": self.show_notes,
+            "2": self.search_notes,
+            "3": self.add_note,
+            "4": self.modify_note,
+            "5": self.quit,
+        }
+
+    def display_menu(self):
+        print(
+            """
+            Notebook Menu
+
+            1. Show all Notes
+            2. Search Notes
+            3. Add Note
+            4. Modify Note
+            5. Quit
+            """
+        )
+
+    def run(self):
+        """Display the menu and respond to choices"""
+        while True:
+            self.display_menu()
+            choice = input("Enter an option: ")
+            action = self.choices.get(choice)
+            if action:
+                action()
+            else:
+                print("{0} is not a valid choice".format(choice))
+
+    def show_notes(self, notes=None):
+        if not notes:
+            notes = self.notebook.notes
+        for note in notes:
+            print("{0}: {1}\n{2}".format(note.id, note.tags, note.memo))
+
+    def search_notes(self):
+        filter = input("Search for: ")
+        notes = self.notebook.search(filter)
+        self.show_notes(notes)
+
+    def add_note(self):
+        memo = input("Enter a memo: ")
+        self.notebook.new_note(memo)
+        print("Your note has been added.")
+
+    def modify_note(self):
+        id = input("Enter a note id: ")
+        memo = input("Enter a memo: ")
+        tags = input("Enter tags: ")
+        if memo:
+            self.notebook.modify_memo(id, memo)
+        if tags:
+            self.notebook.modify_tags(id, tags)
+
+    def quit(self):
+        print("Thank you for using your notebook today.")
+        sys.exit(0)
+
+if __name__ == "__main__":
+    Menu().run()
+#+END_SRC
+
+* tests
+
+#+BEGIN_SRC python :tangle notebook_app/tests/notebook/test_note.py
 import pytest
+from typing import Tuple
 from src.notebook import Note
 
 # global vars
-N1 = Note("Hello First")
-N2 = Note("Hello Again")
+@pytest.fixture
+def notes() -> Tuple[Note, Note]:
+    N1 = Note("Hello First")
+    N2 = Note("Hello Again")
+    return (N1, N2)
 
-def test_id_is_incrementing():
-    assert N1.id == 1 and N2.id == 2
+def test_id_is_incrementing(notes) -> None:
+    assert notes[0].id == 1 and notes[1].id == 2
 
-def test_match_finding_words():
-    assert N1.match("First") and not N2.match("Second")
+def test_match_finding_words(notes) -> None:
+    assert notes[0].match("First") and not notes[1].match("Second")
+#+END_SRC
+
+#+BEGIN_SRC python :tangle notebook_app/tests/notebook/test_notebook.py
+import pytest
+from src.notebook import Notebook
+
+@pytest.fixture
+def n() -> Notebook:
+    n = Notebook()
+    n.new_note("Hello World", "first")
+    n.new_note("Hello Again", "second")
+    return n
+
+def test_memo_correctly_added(n) -> None:
+    assert n.notes[0].memo == "Hello World" and n.notes[1].memo == "Hello Again"
+
+def test_notebook_search(n) -> None:
+    assert len(n.search("Hello")) == 2
+    assert len(n.search("World")) == 1
+
+def test_modification_of_memo(n) -> None:
+    assert len(n.search("Hello")) == 2
+    n.modify_memo(n.notes[0].id, "Hi World")
+    assert len(n.search("Hello")) == 1
+
+def test_modification_of_tags(n) -> None:
+    assert len(n.search("first")) == 1
+    n.modify_tags(n.notes[0].id, "second")
+    assert len(n.search("second")) == 2
 #+END_SRC

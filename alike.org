@@ -1,0 +1,7 @@
+#+TITLE: When Objects Are Alike
+
+In this chapter we cover:
+- Basic Inheritance
+- Inheriting from built-in types
+- Multiple Inheritance
+- Polymorphism and Duck Typing

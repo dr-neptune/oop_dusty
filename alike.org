@@ -5,3 +5,239 @@ In this chapter we cover:
 - Inheriting from built-in types
 - Multiple Inheritance
 - Polymorphism and Duck Typing
+
+* Basic Inheritance
+
+#+BEGIN_SRC python
+class Contact:
+    all_contacts = []
+
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        Contact.all_contacts.append(self)
+
+
+# c = Contact("Michael", "mrose@yes")
+# d = Contact("Not Michael", "esorm@sey")
+
+print([i.name for i in c.all_contacts])
+
+class Supplier(Contact):
+    def order(self, order):
+        print(
+            "If this were a real system we would send "
+            f"'{order}' order to '{self.name}'"
+        )
+
+e = Contact("Some Body", "somebody@example.net")
+s = Supplier("Sup Plier", "supplier@example.net")
+
+print(e.name, e.email, s.name, s.email)
+b.order("I need pliers")
+s.order("I need pliers")
+#+END_SRC
+
+* Extending Built-ins
+
+We can also add functionality to built-in classes with inheritance.
+
+#+BEGIN_SRC python
+# extending the list class
+class ContactList(list):
+    def search(self, name):
+        """Return all contacts that contain the search value in their name"""
+        matching_contacts = []
+        for contact in self:
+            if name in contact.name:
+                matching_contacts.append(contact)
+        return matching_contacts
+
+class Contact:
+    all_contacts = ContactList()
+
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+        Contact.all_contacts.append(self)
+
+c1 = Contact("John A", "johna@example.net")
+c2 = Contact("John B", "johnb@example.net")
+c3 = Contact("Jenna C", "jennac@example.net")
+
+print([c.name for c in Contact.all_contacts.search("John")])
+
+# extending the dict class
+class LongNameDict(dict):
+    def longest_key(self):
+        longest = None
+        for key in self:
+            if not longest or len(key) > len(longest):
+                longest = key
+        return longest
+
+longkeys = LongNameDict()
+longkeys["hello"] = 1
+longkeys["longest yet"] = 5
+longkeys["hello2"] = "world"
+print(longkeys.longest_key())
+#+END_SRC
+
+* Overriding and Super
+
+If we wish to change or add behavior, we could override a method. One way of doing this is through inheritance.
+
+#+BEGIN_SRC python
+class Friend(Contact):
+    def __init__(self, name, email, phone):
+        super().__init__(name, email)
+        self.phone = phone
+#+END_SRC
+
+* Multiple Inheritance
+
+You probably don't need multiple inheritance.
+
+The simplest and most useful form of multiple inheritance is called a mixin.
+A mixin is a superclass that is not intended to exist on its own, but is meant to be inherited by some other class to provide extra functionality.
+
+For example, say we want to add the capability to send an email to self.email.
+
+#+BEGIN_SRC python
+# email mixin class
+class MailSender:
+    def send_mail(self, message):
+        print("Sending mail to " + self.email)
+        # add email logic here
+
+# make a combination Contact and MailSender class
+class EmailableContact(Contact, MailSender):
+    pass
+
+e = EmailableContact("John Smith", "jsmith@example.net")
+
+print(Contact.all_contacts)
+
+e.send_mail("Hello, test e-mail")
+
+# example address mixin
+class AddressHolder:
+    def __init__(self, street, city, state, code):
+        self.street = street
+        self.city = city
+        self.state = state
+        self.code = code
+#+END_SRC
+
+* The Diamond Problem
+
+We can use the AddressHolder class as a parent of our existing Friend class. The tricky part is that we now have two parent __init__ methods, both of which need to be initialized with different arguments.
+
+#+BEGIN_SRC python
+# naive approach
+class Friend(Contact, AddressHolder):
+    def __init__(self, name, email, phone, street, city, state, code):
+        Contact.__init__(self, name, email)
+        AddressHolder.__init__(self, street, city, state, code)
+        self.phone = phone
+#+END_SRC
+
+Multiple Inheritance can run into a problem in which superclasses can reference the same superclass, initializing the super superclass multiple times.
+
+Note: The order in which methods can be called can be adapted on the fly by modifying the __mro__(Method Resolution Order) attribute on the class.
+
+Here is an example of the diamond problem:
+
+
+#+DOWNLOADED: /tmp/screenshot.png @ 2021-05-24 08:46:50
+[[file:The Diamond Problem/screenshot_2021-05-24_08-46-50.png]]
+
+#+BEGIN_SRC python
+class BaseClass:
+    num_base_calls = 0
+
+    def call_me(self):
+        print("Calling method on Base Class")
+        self.num_base_calls += 1
+
+class LeftSubClass(BaseClass):
+    num_left_calls = 0
+
+    def call_me(self):
+        BaseClass.call_me(self)
+        print("Calling method on Left SubClass")
+        self.num_left_calls += 1
+
+class RightSubClass(BaseClass):
+    num_right_calls = 0
+
+    def call_me(self):
+        BaseClass.call_me(self)
+        print("Calling method on Right SubClass")
+        self.num_right_calls += 1
+
+class SubClass(LeftSubClass, RightSubClass):
+    num_sub_calls = 0
+
+    def call_me(self):
+        LeftSubClass.call_me(self)
+        RightSubClass.call_me(self)
+        print("Calling method on SubClass")
+        self.num_sub_calls += 1
+
+s = SubClass()
+s.call_me()
+
+print(s.num_sub_calls,
+      s.num_left_calls,
+      s.num_right_calls,
+      s.num_base_calls)
+#+END_SRC
+
+This could lead to some pernicious bugs if the baseclass is doing actual work.
+The thing to keep in mind with multiple inheritance is that we only want to call the next method in the class hierarchy, not the parent method.
+The super keyword was originally developed to make complicated forms of multiple inheritance possible.
+Here is the same code with super:
+
+#+BEGIN_SRC python
+class BaseClass:
+    num_base_calls = 0
+
+    def call_me(self):
+        print("Calling method on Base Class")
+        self.num_base_calls += 1
+
+class LeftSubClass(BaseClass):
+    num_left_calls = 0
+
+    def call_me(self):
+        super().call_me()
+        print("Calling method on Left SubClass")
+        self.num_left_calls += 1
+
+class RightSubClass(BaseClass):
+    num_right_calls = 0
+
+    def call_me(self):
+        super().call_me()
+        print("Calling method on Right SubClass")
+        self.num_right_calls += 1
+
+class SubClass(LeftSubClass, RightSubClass):
+    num_sub_calls = 0
+
+    def call_me(self):
+        super().call_me()
+        print("Calling method on SubClass")
+        self.num_sub_calls += 1
+
+s = SubClass()
+s.call_me()
+
+print(s.num_sub_calls,
+      s.num_left_calls,
+      s.num_right_calls,
+      s.num_base_calls)
+#+END_SRC
+
+* Different Sets of Arguments

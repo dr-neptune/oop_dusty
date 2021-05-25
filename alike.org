@@ -241,3 +241,92 @@ print(s.num_sub_calls,
 #+END_SRC
 
 * Different Sets of Arguments
+
+When we originally called the init method for Friend we were calling __init__ for both parent classes with different sets of arguments
+
+#+BEGIN_SRC python
+class Friend(Contact, AddressHolder):
+    def __init__(self, name, email, phone, street, city, state, code):
+        Contact.__init__(self, name, email)
+        AddressHolder.__init__(self, street, city, state, code)
+        self.phone = phone
+#+END_SRC
+
+We don't necessarily know which class super is going to try to initialize first.
+
+#+BEGIN_SRC python
+# proper version of Friend
+class Contact:
+    def __init__(self, name="", email="", **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+        self.email = email
+        self.all_contacts.append(self)
+
+class AddressHolder:
+    def __init__(self, street="", city="", state="", code="", **kwargs):
+        super().__init__(**kwargs)
+        self.street = street
+        self.city = city
+        self.state = state
+        self.code = code
+
+class Friend:
+    def __init__(self, phone="", **kwargs):
+        super().__init__(**kwargs)
+        self.phone = phone
+#+END_SRC
+
+* Polymorphism
+
+Different behaviors happen depending on which subclass is being used, without having to explicitly know what the subclass actually is.
+
+#+BEGIN_SRC python
+class AudioFile:
+    def __init__(self, filename):
+        if not filename.endswith(self.ext):
+            raise Exception("Invalid File Format")
+        self.filename = filename
+
+class MP3File(AudioFile):
+    ext = "mp3"
+
+    def play(self):
+        print(f"playing {self.filename} as mp3")
+
+class WavFile(AudioFile):
+    ext = "wav"
+
+    def play(self):
+        print(f"playing {self.filename} as wav")
+
+class OggFile(AudioFile):
+    ext = "ogg"
+
+    def play(self):
+        print(f"playing {self.filename} as ogg")
+
+meep = MP3File("moop.mp3")
+meep.play()
+
+mep = OggFile("blup.ogg")
+mep.play()
+
+mop = WavFile("woobwoobwoob.wav")
+mop.play()
+
+# Duck Typing
+class FlacFile:
+    def __init__(self, filename):
+        if not filename.endswith(".flac"):
+            raise Exception("Invalid File Format")
+        self.filename = filename
+
+    def play(self):
+        print(f"playing {self.filename} as flac")
+
+flacka = FlacFile("wackawacka.flac")
+flacka.play()
+#+END_SRC
+
+* Abstract Base Classes

@@ -330,3 +330,107 @@ flacka.play()
 #+END_SRC
 
 * Abstract Base Classes
+
+Abstract Base Classes define a set of methods that a class must implement in order to be considered a duck-type instance of that class.
+
+* Using an Abstract Base Class
+
+#+BEGIN_SRC python
+from collections.abc import Container
+
+print(Container.__abstractmethods__)
+help(Container.__abstractmethods__)
+
+class OddContainer:
+    def __contains__(self, x):
+        if not isinstance(x, int) or not x % 2:
+            return False
+        return True
+
+oc = OddContainer()
+print(isinstance(oc, Container))
+print(issubclass(OddContainer, Container))
+
+for i in range(0, 10):
+    print(i, ":", i in oc)
+#+END_SRC
+
+* Creating an Abstract Base Class
+
+Say we want to make a media player with third party plugins. It is advisable in this case to document what API the third-party plugins should provide.
+
+#+BEGIN_SRC python
+import abc
+
+class MediaLoader(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def play(self):
+        pass
+
+    @abc.abstractproperty
+    def ext(self):
+        pass
+
+    @classmethod
+    def __subclasshook__(cls, C):
+        if cls is MediaLoader:
+            attrs = set(dir(C))
+            if set(cls.__abstractmethods__) <= attrs:
+                return True
+        return NotImplemented
+
+# fails
+class Wav(MediaLoader):
+    pass
+
+x = Wav()
+
+# passes
+class Ogg(MediaLoader):
+    ext = ".ogg"
+    def play(self):
+        pass
+
+o = Ogg()
+#+END_SRC
+
+* Demystifying the Magic
+
+- @classmethod: This decorator marks the method as a class method. It essentially says that the method can be called on a class instead of an instantiated object
+- def __subclasshook__(cls, C): This defines the __subclasshook__ class method. This is called by the python interpreter to answer the question: Is this class C a subclass of this class?
+- attrs = set(dir(C)): Get the set of abstract methods that the class has, including any parent classes in its class hierarchy
+- if set(cls.__abstractmethods__) <= attrs: Check whether the set of abstract methods in this class has been supplied in the candidate class
+- return True: if all the abstract methods have been supplied, then the candidate class is a subclass of this class and we return True.
+- return NotImplemented: if any of the conditionals have not been met, then use the default mechanism for subclass detection
+
+Now we can define the Ogg class as a subclass of the MediaLoader class without actually extending the MediaLoader class:
+
+#+BEGIN_SRC python
+class Ogg():
+    ext = ".ogg"
+    def play(self):
+        print("This will play an ogg file")
+
+print(issubclass(Ogg, MediaLoader))
+print(isinstance(Ogg(), MediaLoader))
+#+END_SRC
+
+* Case Study
+
+We will be developing an automated grading system for programming assignments.
+The system will need to provide a simple class-based interface for course writers to create their assignments and should give a useful error message if it does not fulfill that interface.
+
+We can start by defining the interface that the course authors will need to use.
+
+#+BEGIN_SRC python
+class IntroToPython:
+    def lesson(self):
+        return f"""
+        Hello {self.student}. Define two variables,
+        an integer named a with value 1
+        and a string named b with value 'hello'
+        """
+
+    def check(self, code):
+        return code == "a = 1\nb = 'hello'"
+#+END_SRC

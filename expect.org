@@ -1,0 +1,120 @@
+#+TITLE: Expecting the Unexpected
+
+* Raising an Exception
+
+#+BEGIN_SRC python
+class EvenOnly(list):
+    def append(self, integer):
+        if not isinstance(integer, int):
+            raise TypeError("Only integers can be added")
+        if integer % 2:
+            raise ValueError("Only even numbers can be added")
+        super().append(integer)
+
+e = EvenOnly()
+
+e.append("a string")
+e.append(2)
+e.append(3)
+e.append(4)
+e.append(0)
+print(e)
+#+END_SRC
+
+* The effects of an exception
+
+#+BEGIN_SRC python
+def no_return():
+    print("I am about to raise an exception")
+    raise Exception("This is always raised")
+    print("This line will never execute")
+    return "I won't be returned"
+
+def call_exceptor():
+    print("call_exceptor starts here")
+    no_return()
+    print("An exception was raised so these lines don't run")
+
+call_exceptor()
+#+END_SRC
+
+* Handling Exceptions
+
+#+BEGIN_SRC python
+def funny_division(divider):
+    try:
+        return 100 / divider
+    except ZeroDivisionError:
+        return "Zero is not a good divider!"
+
+print(funny_division(0))
+
+# multiple error types
+def funny_division2(divider):
+    try:
+        if divider == 13:
+            raise ValueError("13 is an unlucky number")
+        return 100 / divider
+    except (ZeroDivisionError, TypeError):
+        return "Enter a number other than 0"
+
+print(funny_division2(0))
+print(funny_division2(13))
+
+# referencing the exception object itself
+# also finally and else
+import random
+some_exceptions = [ValueError, TypeError, IndexError, None]
+
+try:
+    choice = random.choice(some_exceptions)
+    print(f"raising {choice}")
+    if choice:
+        raise choice("An Error")
+except ValueError:
+    print("Caught a ValueError")
+except TypeError:
+    print("Caught a TypeError")
+except Exception as e:
+    print("Caught some other error: %s" % (e.__class__.__name__))
+else:
+    print("This code is called if there is no exception")
+finally:
+    print("This cleanup code is always called")
+#+END_SRC
+
+* The Exception Hierarchy
+
+
+
+#+DOWNLOADED: /tmp/screenshot.png @ 2021-05-26 09:00:13
+[[file:The Exception Hierarchy/screenshot_2021-05-26_09-00-13.png]]
+
+* Defining our own Exceptions
+
+It is trivial to define new exceptions of our own. All we have to do is inherit from the Exception class.
+
+#+BEGIN_SRC python
+# simple exception
+class InvalidWithdrawal(Exception):
+    pass
+
+raise InvalidWithdrawal("You don't have $50 in your account")
+
+# better
+class InvalidWithdrawal(Exception):
+    def __init__(self, balance, amount):
+        super().__init__(f"Account doesn't have ${amount}")
+        self.amount = amount
+        self.balance = balance
+
+    def overage(self):
+        return self.amount - self.balance
+
+raise InvalidWithdrawal(25, 50)
+
+try:
+    raise InvalidWithdrawal(25, 50)
+except InvalidWithdrawal as e:
+    print(f"I'm sorry, but your withdrawal is more than your balance by ${e.overage()}")
+#+END_SRC

@@ -409,7 +409,7 @@ class Cursor:
         self.position -= 1
 
     def home(self):
-        while self.document.characters[self.position - 1] != "\n":
+        while self.document.characters[self.position - 1].character != "\n":
             self.position -= 1
             if self.position == 0:
                 # got the beginning of file before newline
@@ -417,7 +417,7 @@ class Cursor:
 
     def end(self):
         while (self.position < len(self.document.characters)
-               and self.document.characters[self.position] != "\n"):
+               and self.document.characters[self.position].character != "\n"):
             self.position += 1
 
 
@@ -444,7 +444,7 @@ class Document:
 
     @property
     def string(self):
-        return "".join(self.characters)
+        return "".join((str(c) for c in self.characters))
 
 # local tests
 d = Document()
@@ -481,4 +481,27 @@ class Character:
         underline = "_" if self.underline else ""
         return bold + italic + underline + self.character
 
+
+d = Document()
+d.insert("h")
+d.insert("e")
+d.insert(Character("l", bold=True))
+d.insert(Character("l", bold=True))
+d.insert("o")
+d.insert("\n")
+d.insert(Character("w", italic=True))
+d.insert(Character("o", italic=True))
+d.insert(Character("r", underline=True))
+d.insert("l")
+d.insert("d")
+print(d.string)
+
+d.cursor.home()
+d.delete()
+d.insert("W")
+print(d.string)
+
+d.characters[0].underline = True
+
+print(d.string)
 #+END_SRC

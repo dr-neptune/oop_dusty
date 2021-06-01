@@ -1,0 +1,204 @@
+#+TITLE: Python Data Structures
+
+In this chapter, we'll discuss the object oriented features of data structures.
+In particular, we'll cover the following topics:
+
+- Tuples and named tuples
+- Dataclasses
+- Dictionaries
+- Lists and Sets
+- How and why to extend built in objects
+- Three types of queues
+
+* Tuples and Named Tuples
+
+Tuples are used to store data; behavior cannot be associated with a tuple. If we require behavior to manipulate a tuple, we have to pass the tuple into a function that performs the action.
+
+Generally tuples store heterogenous data.
+
+#+BEGIN_SRC python
+stock = "GOOG", 9001.42, 9002.43, 9000.41
+stock2 = ("GOOG", 9001.42, 9002.43, 9000.41)
+
+print(stock)
+
+import datetime as dt
+
+def middle(stock, date):
+    symbol, current, high, low = stock
+    return (((high + low) / 2), date)
+
+mid_value, date = middle(stock, dt.date(2020, 1, 1))
+
+print(mid_value)
+
+# tuple unpacking
+print(stock)
+high = stock[2]
+print(high)
+print(stock[1:3])
+#+END_SRC
+
+* Named Tuples
+
+Named tuples are perfect for data only representations.
+
+#+BEGIN_SRC python
+from collections import namedtuple
+
+Stock = namedtuple("Stock", ["symbol", "current", "high", "low"])
+stock = Stock("GOOG", 177.46, high=178.67, low=175.79)
+
+print(stock.high)
+#+END_SRC
+
+* DataClasses
+
+Dataclasses are basically regular objects with a clean syntax for predefining attributes.
+
+There are a few ways to create one.
+
+The simplest is to use a similar construct to that used for named tuples:
+
+#+BEGIN_SRC python
+from dataclasses import make_dataclass
+
+Stock = make_dataclass("Stock", ["symbol", "current", "high", "low"])
+stock = Stock("FB", 177.46, high=178.67, low=175.79)
+
+# once instantiated, the dataclass object can be used like any regular class
+print(stock)
+print(stock.current)
+stock.unexpected_attribute = "allowed"
+print(stock.unexpected_attribute)
+#+END_SRC
+
+Another, more common way to make a dataclass is with a decorator
+
+#+BEGIN_SRC python
+from dataclasses import dataclass
+
+@dataclass
+class StockDecorated:
+    name: str
+    current: float
+    high: float
+    low: float
+
+@dataclass
+class StockDefaults:
+    name: str
+    current: float = 0.0
+    high: float = 0.0
+    low: float = 0.0
+
+print(StockDefaults("FB"))
+print(StockDecorated("FN", 176.46, 178.67, 175.79))
+
+# we can also add ordering
+@dataclass(order=True)
+class StockOrdered:
+    name: str
+    current: float = 0.0
+    high: float = 0.0
+    low: float = 0.0
+
+so_1 = StockOrdered("FN", 176.46, 178.67, 175.79)
+so_2 = StockOrdered("FN")
+so_3 = StockOrdered("FN", 178.42, 179.28, 176.39)
+
+print(so_1 < so_2)
+print(so_1 > so_2)
+print(sorted([so_1, so_2, so_3]))
+#+END_SRC
+
+* Dictionaries
+
+#+BEGIN_SRC python
+stocks = {
+    "GOOG": (1234.00, 1242.54, 1231.06),
+    "MSFT": (110.41, 110.45, 109.84)
+}
+
+print(stocks["GOOG"])
+# try to get with keyerror catch
+print(stocks.get("RIM", "NOT FOUND"))
+
+# setdefault for not founds
+print(stocks.setdefault("GOOG", "INVALID"))
+
+print(stocks.setdefault("BBRY", (10.87, 10.76, 10.90)))
+print(stocks["BBRY"])
+
+for stock, values in stocks.items():
+    print(f"{stock} last value is {values[0]}")
+
+# we can use all types of values as keys
+random_keys = {}
+random_keys["astring"] = "somestring"
+random_keys[5] = "aninteger"
+random_keys[25.2] = "floats work too"
+random_keys[("abc", 123)] = "so do tuples"
+
+class AnObject:
+    def __init__(self, avalue):
+        self.avalue = avalue
+
+my_obj = AnObject(15)
+
+random_keys[my_obj] = "We can even store objects"
+
+my_obj.avalue = 16
+
+try:
+    random_keys[[1, 2, 3]] = "we can't store lists though"
+except:
+    print("unable to store list\n")
+
+for k, v in random_keys.items():
+    print(f"{k} has value {v}")
+
+#+END_SRC
+
+* DefaultDict
+
+#+BEGIN_SRC python
+from collections import defaultdict
+
+def letter_frequency(sentence):
+    frequencies = defaultdict(int)
+    for letter in sentence:
+        frequencies[letter] += 1
+    return frequencies
+
+print(letter_frequency("recursion ecursion cursion ursion rsion sion ion on n "))
+
+# we can write our own functions and pass them into the defaultdict
+num_items = 0
+
+def tuple_counter():
+    global num_items
+    num_items += 1
+    return (num_items, [])
+
+
+d = defaultdict(tuple_counter)
+
+d["a"][1].append("hello")
+d["b"][1].append("world")
+d["c"][1].append("!")
+print(d)
+#+END_SRC
+
+* Counter
+
+#+BEGIN_SRC python
+from collections import Counter
+
+def letter_frequency(sentence):
+    return Counter(sentence)
+
+print(letter_frequency("barracuda").most_common(2))
+#+END_SRC
+
+* Lists

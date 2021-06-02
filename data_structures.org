@@ -23,6 +23,7 @@ stock2 = ("GOOG", 9001.42, 9002.43, 9000.41)
 print(stock)
 
 import datetime as dt
+from functools import total_ordering
 
 def middle(stock, date):
     symbol, current, high, low = stock
@@ -202,3 +203,180 @@ print(letter_frequency("barracuda").most_common(2))
 #+END_SRC
 
 * Lists
+
+#+BEGIN_SRC python
+class WeirdSortee:
+    def __init__(self, string, number, sort_num):
+        self.string = string
+        self.number = number
+        self.sort_num = sort_num
+
+    def __lt__(self, object):
+        if self.sort_num:
+            return self.number < object.number
+        return self.string < object.string
+
+    def __repr__(self):
+        return f"{self.string}:{self.number}"
+
+a, b, c, d = WeirdSortee("a", 4, True), WeirdSortee("b", 3, True), WeirdSortee("c", 2, True), WeirdSortee("d", 1, True)
+
+l = [a, b, c, d]
+
+l.sort()
+print(l)
+
+for i in l:
+    i.sort_num = False
+
+l.sort()
+print(l)
+
+# other methods:
+# __gt__, __eq__, __ne__, __ge__, __lt__, __le__
+# alternatively @total_ordering
+@total_ordering
+class WeirdSortee:
+    def __init__(self, string, number, sort_num):
+        self.string = string
+        self.number = number
+        self.sort_num = sort_num
+
+    def __lt__(self, object):
+        if self.sort_num:
+            return self.number < object.number
+        return self.string < object.string
+
+    def __repr__(self):
+        return f"{self.string}:{self.number}"
+
+    def __eq__(self, other):
+        return all((self.string == other.string,
+                    self.number == other.number,
+                    self.sort_num == other.sort_num))
+
+
+# alternatively, sort takes a key arg
+l = ["hello", "HELLO", "Helios"]
+print(l)
+l.sort()
+print(l)
+l.sort(key=str.lower)
+print(l)
+
+# it is common to sort a tuple by an item other than the first in the list
+from operator import itemgetter
+
+l = [("h", 4), ("n", 6), ("o", 5), ("p", 1), ("t", 3), ("y", 2)]
+l.sort(key=itemgetter(1))
+print(l)
+#+END_SRC
+
+* Sets
+
+In python, sets can be any hashable object, not just numbers.
+
+#+BEGIN_SRC python
+song_library = [
+    ("Kazoo Sonata in D-minor", "Andrew Jackson Jihad"),
+    ("Shards of Scorched Flesh", "Bob Dylan"),
+    ("Turn on Your Lovelight", "Grateful Dead"),
+    ("Electric Slide", "People Under the Stairs"),
+    ("Love in the time of the Human Papillomavirus", "Andrew Jackson Jihad")
+]
+
+artists = set()
+for song, artist in song_library:
+    artists.add(artist)
+
+print(artists)
+
+first_artists = {"bananas", "in", "pajamas"}
+second_artists = {"pajamas", "in", "montauk"}
+
+print(f"""
+Union:\t{first_artists.union(second_artists)}
+Intersection:\t{first_artists.intersection(second_artists)}
+Symmetric Difference:\t{first_artists.symmetric_difference(second_artists)}
+""")
+#+END_SRC
+
+* Extending built-in functions
+
+When we have a built-in container object that we want to add functionality to, we have two options:
+- create a new object which holds that container as an attribute (composition)
+  - This is best if all we want to do is use the container to store some objects using that container's features
+- subclass the built-in object and add or adapt methods on it to do what we want (inheritance)
+  - If we wish to change the way the container works, this might be better
+
+#+BEGIN_SRC python
+print(dir(list))
+#+END_SRC
+
+#+BEGIN_SRC txt
+['__add__', '__class__', '__contains__', '__delattr__', '__delitem__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__getitem__', '__gt__', '__hash__', '__iadd__', '__imul__', '__init__', '__init_subclass__', '__iter__', '__le__', '__len__', '__lt__', '__mul__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__reversed__', '__rmul__', '__setattr__', '__setitem__', '__sizeof__', '__str__', '__subclasshook__', 'append', 'clear', 'copy', 'count', 'extend', 'index', 'insert', 'pop', 'remove', 'reverse', 'sort']
+#+END_SRC
+
+* Case Study
+
+We'll be writing a simple link collector which will visit a website and collect every link on every page it finds on that site.
+
+#+BEGIN_SRC html :tangle index.html
+<html>
+  <body>
+    <a href="contact.html">Contact Us</a>
+    <a href="blog.html">Blog</a>
+    <a href="esme.html">My Dog</a>
+    <a href="/hobbies.html">Some Hobbies</a>
+    <a href="/contact.html">Contact Again</a>
+    <a href="http://www.archlinux.org">A great OS</a>
+  </body>
+</html>
+#+END_SRC
+
+#+BEGIN_SRC bash
+python -m http.server
+#+END_SRC
+
+#+BEGIN_SRC python :tangle link_collector.py
+# connect to a page and parse all the links from that page
+from urllib.request import urlopen
+from urllib.parse import urlparse, urljoin
+import re
+import sys
+
+LINK_REGEX = re.compile("<a [^>]*href=['\"]([^'\"]+)['\"][^>]*>")
+
+class LinkCollector:
+    def __init__(self, url):
+        self.url = "http://+" + urlparse(url).netloc
+        self.collected_links = set()
+        self.visited_links = set()
+
+    def collect_links(self, path="/"):
+        full_url = self.url + path
+        self.visited_links.add(full_url)
+        page = str(urlopen(full_url).read())
+        links = LINK_REGEX.findall(page)
+        links = {self.normalize_url(path, link) for link in links}
+        self.collected_links = links.union(self.collected_links)
+        unvisited_links = links.difference(self.visited_links)
+        print(links, self.visited_links, self.collected_links, unvisited_links)
+        for link in unvisited_links:
+            if link.startswith(self.url):
+                self.collect_links(urlparse(link).path)
+
+    def normalize_url(self, path, link):
+        if link.startswith("http://"):
+            return link
+        elif link.startswith("/"):
+            return self.url + link
+        else:
+            return self.url + path.rpartition("/")[0] + "/" + link
+
+if __name__ == '__main__':
+    collector = LinkCollector(sys.argv[1])
+    collector.collect_links()
+    for link in collector.collected_links:
+        print(link)
+#+END_SRC

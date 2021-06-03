@@ -1,0 +1,442 @@
+#+TITLE: Python Object-Oriented Shortcuts
+
+In this chapter, we look at a grab bag of Python features that are not strictly object oriented:
+
+- Built-in functions that take care of common tasks in one call
+- File I/O and Context Managers
+- An alternative to method overloading
+- Functions as objects
+
+* Python Built-In Functions
+
+** The len() function
+
+Counts the number of items in some kind of container object.
+Most objects that len() will apply to have a method called __len__()
+
+#+BEGIN_SRC python
+len([1, 2, 3, 4])
+#+END_SRC
+
+** The reversed() function
+
+reversed() calls the __reversed__() function on the class for the parameter. If that method doesn't exist, reversed builds the reversed sequence itself using calls to __len__() and __getitem__().
+
+#+BEGIN_SRC python
+normal_list = [1, 2, 3, 4, 5]
+
+class CustomSequence:
+    def __len__(self):
+        return 5
+
+    def __getitem__(self, index):
+        return f"x{index}"
+
+class FunkyBackwards:
+    def __reversed__(self):
+        return "backwards"
+
+
+for seq in normal_list, CustomSequence(), FunkyBackwards():
+    print(f"\n{seq.__class__.__name__}: ", end="")
+    for item in reversed(seq):
+        print(item, end=", ")
+
+#+END_SRC
+
+** Enumerate
+
+#+BEGIN_SRC python :tangle enum.py
+import sys
+
+fname = sys.argv[1]
+
+with open(fname) as file:
+    for index, line in enumerate(file):
+        print(f"{index+1}: {line}", end="")
+#+END_SRC
+
+* File I/O
+
+#+BEGIN_SRC python
+contents = "Some file contents"
+file = open("filename", "w")  # w for write. a is for append
+file.write(contents)
+file.close()
+#+END_SRC
+
+* Placing it in context
+
+file-like objects have two special methods named __enter__ and __exit__. These methods turn the file object into a *context manager*.
+These methods are called before and after nested code is executed if called with a *with* statement.
+
+#+BEGIN_SRC python
+import random, string
+
+
+# construct a sequence of characters and automatically convert it to a string upon exit
+class StringJoiner(list):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, tb):
+        self.result = "".join(self)
+
+
+with StringJoiner() as joiner:
+    for i in range(15):
+        joiner.append(random.choice(string.ascii_letters))
+
+print(joiner.result)
+#+END_SRC
+
+* Default Arguments
+
+#+BEGIN_SRC python
+# keyword only argument
+def keyword_only(x, y="defaultkw", *, a, b="only"):
+    print(x, y, a, b)
+
+print(keyword_only(2, a=3))
+#+END_SRC
+
+* Variable Argument Lists
+
+#+BEGIN_SRC python
+# varargs
+def get_pages(*links):
+    # download the link with urllib
+    print(links)
+
+print(get_pages())
+print(get_pages("a"))
+print(get_pages("a", "b"))
+
+# kwargs
+class Options:
+    default_options = {
+        "port": 21,
+        "host": "localhost",
+        "username": None,
+        "password": None,
+        "debug": False,
+    }
+
+    def __init__(self, **kwargs):
+        self.options = dict(Options.default_options)
+        self.options.update(kwargs)
+
+    def __getitem__(self, key):
+        return self.options[key]
+
+
+options = Options(username="dr-neptune", password="password123", debug=True)
+
+print([options[i] for i in options.default_options.keys()])
+
+# vararg, kwarg example
+import shutil
+import os.path
+
+def augmented_move(target_folder, *filenames, verbose=False, **specific):
+    """
+    Move all filenames into the target_folder, allowing
+    specific treatment for certain files.
+    """
+    def print_verbose(message, filename):
+        """print the message only if verbose is enabled"""
+        if verbose:
+            print(message.format(filename))
+
+    for filename in filenames:
+        target_path = os.path.join(target_folder, filename)
+        if filename in specific:
+            if specific[filename] == "ignore":
+                print_verbose("Ignoring {0}", filename)
+            elif specific[filename] == "copy":
+                print_verbose(f"Copying {0}", filename)
+                shutil.copyfile(filename, target_path)
+        else:
+            print_verbose("Moving {0}", filename)
+            shutil.move(filename, target_path)
+
+# examples of calling it
+augmented_move("move_here", "four", "five", "six", four="copy", five="ignore")
+#+END_SRC
+
+* Unpacking Arguments
+
+#+BEGIN_SRC python
+def show_args(arg1, arg2, arg3="Three"):
+    print(arg1, arg2, arg3)
+
+# we can pass in keyword args with a dict
+some_args = range(3)
+more_args = {"arg1": "One",
+             "arg2": "Two"}
+
+# unpacking a sequence
+show_args(*some_args)
+
+# unpacking a dict
+show_args(**more_args)
+
+# more fun with dicts
+x = {"a": 1, "b": 2}
+y = {"b": 11, "c": 3}
+z = {**x, **y}
+
+print(z)
+#+END_SRC
+
+* Functions are Objects, too
+
+#+BEGIN_SRC python
+def my_function():
+    print("The function was called")
+
+my_function.description = "A simple function"
+
+def second_function():
+    print("The second function was called")
+
+second_function.description = "Another simple function"
+
+def another_function(function):
+    print(f"""
+The description:\t{function.description}
+The name:\t\t{function.__name__}
+The class:\t\t{function.__class__}
+
+Now calling the function passed in:\n
+""")
+    function()
+
+another_function(my_function)
+another_function(second_function)
+#+END_SRC
+
+The fact that functions are first-class objects is most often used to pass them around to be executed at a later date (for example, when a condition is satisfied).
+
+#+BEGIN_SRC python
+import datetime
+import time
+
+class TimedEvent:
+    def __init__(self, endtime, callback):
+        self.endtime = endtime
+        self.callback = callback
+
+    def ready(self):
+        return self.endtime <= datetime.datetime.now()
+
+class Timer:
+    def __init__(self):
+        self.events = []
+
+    def call_after(self, delay, callback):
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=delay)
+        self.events.append(TimedEvent(end_time, callback))
+
+    def run(self):
+        while True:
+            ready_events = (e for e in self.events if e.ready())
+            for event in ready_events:
+                event.callback(self)
+                self.events.remove(event)
+                time.sleep(0.5)
+
+def format_time(message, *args):
+    now = datetime.datetime.now()
+    print(f"{now:%I:%M:%S}: {message}")
+
+
+def one(timer):
+    format_time("Called One")
+
+def two(timer):
+    format_time("Called Two")
+
+def three(timer):
+    format_time("Called Three")
+
+
+class Repeater:
+    def __init__(self):
+        self.count = 0
+
+    def repeater(self, timer):
+        format_time(f"repeat {self.count}")
+        self.count += 1
+        timer.call_after(5, self.repeater)
+
+
+t = Timer()
+
+for i, j in enumerate([one, one, two, two, three, three]):
+    t.call_after(i, j)
+
+r = Repeater()
+
+t.call_after(5, r.repeater)
+
+format_time("Starting")
+t.run()
+#+END_SRC
+
+* Using functions as Attributes
+
+With functions as objects, they can be set as callable attributes on other objects
+
+#+BEGIN_SRC python
+class A:
+    def print(self):
+        print("my class is A")
+
+def fake_print():
+    print("my class is not A")
+
+a = A()
+a.print()
+a.print = fake_print
+a.print()
+#+END_SRC
+
+This is used in testing frameworks to perform *monkey-patching*.
+
+* Callable Objects
+
+It is possible to create an object that can be called as though it were a function
+
+#+BEGIN_SRC python
+class Repeater:
+    def __init__(self):
+        self.count = 0
+
+    def __call__(self, timer):
+        format_time(f"repeat {self.count}")
+        self.count += 1
+        timer.call_after(5, self)
+
+t = Timer()
+t.call_after(5, Repeater())
+format_time("{now}: Starting")
+t.run()
+#+END_SRC
+
+* Case Study
+
+We will build a mailing list manager.
+
+To test it without sending actual emails, we can run a built in SMTP server:
+
+#+BEGIN_SRC bash
+python -m smtpd -n -c DebuggingServer localhost:1025
+#+END_SRC
+
+First, let's write some code that actually sends mail:
+
+#+BEGIN_SRC python
+import smtplib
+from email.mime.text import MIMEText
+
+def send_email(subject,
+               message,
+               from_addr,
+               *to_addrs,
+               host="localhost",
+               port=1025,
+               headers=None):
+    email = MIMEText(message)
+    email["Subject"] = subject
+    email["From"] = from_addr
+    headers = headers if headers else {}
+    for header, value in headers.items():
+        email[header] = value
+    sender = smtplib.SMTP(host, port)
+    for addr in to_addrs:
+        del email["To"]
+        email["To"] = addr
+        sender.sendmail(from_addr, addr, email.as_string())
+    sender.quit()
+
+
+send_email("A model subject", "the message contents", "from@example.com", "to1@example.com", "to2@example.com")
+#+END_SRC
+
+Now we can try to build out our mailing list manager with groups
+
+#+BEGIN_SRC python
+from collections import defaultdict
+from contextlib import suppress
+
+
+class MailingList:
+    """Manage groups of e-mail addresses for sending e-mails"""
+    def __init__(self, data_file):
+        self.data_file = data_file
+        self.email_map = defaultdict(set)
+
+    def __enter__(self):
+        self.load()
+        return self
+
+    def __exit__(self, type, value, tb):
+        self.save()
+
+    def add_to_group(self, email, group):
+        """add a group to an email"""
+        self.email_map[email].add(group)
+
+    def emails_in_groups(self, *groups):
+        """collect email addresses in one or more groups"""
+        groups = set(groups)
+        return {e for e, g in self.email_map.items() if g & groups}
+
+    def send_mailing(self, subject, message, from_addr, *groups, headers=None):
+        """Send message to specific groups"""
+        emails = self.emails_in_groups(*groups)
+        send_email(subject, message, from_addr, *emails, headers=headers)
+
+    def save(self):
+        """save emails and groups data"""
+        with open(self.data_file, "w") as file:
+            for email, groups in self.email_map.items():
+                file.write(f"{email} {','.join(groups)}\n")
+
+    def load(self):
+        """load emails and groups"""
+        self.email_map = defaultdict(set)
+        with suppress(IOError):
+            with open(self.data_file) as file:
+                for line in file:
+                    email, groups = line.strip().split(" ")
+                    groups = set(groups.split(","))
+                    self.email_map[email] = groups
+
+
+m = MailingList("addresses.db")
+
+for i in [("friend1@example.com", "friends"),
+          ("friend2@example.com", "friends"),
+          ("family1@example.com", "family"),
+          ("family1@example.com", "professional")]:
+    m.add_to_group(i[0], i[1])
+
+m.send_mailing("A party", "Friends and family only", "me@example.com", "friends", "family", headers={"Reply-To": "me2@example.com"})
+
+# save to disk
+m.save()
+
+# load back into a MailingList object
+m.load()
+
+print(m.email_map)
+
+# with ContextManager
+with MailingList("addresses.db") as ml:
+    ml.add_to_group("friend3@example.com", "friends")
+    ml.send_mailing("What's up", "Hey friends, how's it going", "me@example.com", "friends")
+
+print(ml.email_map)
+#+END_SRC

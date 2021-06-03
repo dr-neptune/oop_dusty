@@ -75,9 +75,12 @@ else:
 #+END_SRC
 
 #+BEGIN_SRC python
+
 def check_match(pattern, string="hello world"):
-    if re.match(pattern, string):
+    regex = re.match(pattern, string)
+    if regex:
         print(f"'{string}' matches pattern '{pattern}'")
+        return regex
     else:
         print(f"'{string}' does not match pattern '{pattern}'")
 
@@ -102,5 +105,23 @@ check_match("hel+o")
 check_match("[a-z]+")
 
 # grouping patterns
+check_match("abc{3}", "abccc")
+check_match("[A-Z][a-z]*( [a-z]+)*\.$", "A good meal.")
 
+# extracting information
+match = check_match("^[a-zA-Z.]+@([a-z.]*\.[a-z]+)$", "some.user@example.com")
+
+print(match.group())
+print(match.groups()[0])
+
+# findall
+print(re.findall("a.", "abacadefagah"))
+print(re.findall("a(.)", "abacadefgah"))
+print(re.findall("(a)(.)", "abacadefgah"))
+
+# make regex efficient with compile
+regex = re.compile("a.")
+print(re.findall(regex, "abaracadabara"))
 #+END_SRC
+
+* Filesystem Paths

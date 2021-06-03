@@ -1,0 +1,106 @@
+#+TITLE: Strings and Serialization
+
+In this chapter we focus on one of Python's most common objects: the string.
+
+We'll look at:
+- The complexities of strings, bytes, and byte arrays
+- The ins and outs of string formatting
+- A few ways to serialize data
+- Regular expressions
+
+* String Manipulation
+
+#+BEGIN_SRC python
+print(dir(str))
+
+s = "hello world"
+print(s.count("l"))
+print(s.find("l"))
+print(s.rindex("l"))
+print(s.replace("l", "m"))
+print(s.partition(" "))
+#+END_SRC
+
+* String Formatting
+
+#+BEGIN_SRC python
+orders = [("beyond burger", 14, 22), ("fries", 4, 89), ("something hoppy", 7, 19)]
+
+print("\nPRODUCT \tQUANTITY \tPRICE \t\tSUBTOTAL")
+for product, price, quantity in orders:
+    subtotal = price * quantity
+    print(
+        f"{product:10s}\t{quantity: ^9d}\t"
+        f"${price: <8.2f}\t${subtotal: >7.2f}"
+    )
+#+END_SRC
+
+* Mutable byte strings
+
+The bytes type is immutable.
+
+#+BEGIN_SRC python
+b = bytearray(b"abcdefgh")
+
+b[4:6] = b"\x15\xa3"
+print(b)
+#+END_SRC
+
+* Regular Expressions
+
+** Matching Patterns
+
+#+BEGIN_SRC python
+import re
+
+search_string = "hello world"
+pattern = "hello world"
+print(re.match(pattern, search_string))
+#+END_SRC
+
+The author uses the script below. I'll be using a function instead
+
+#+BEGIN_SRC python :tangle regex_matcher.py
+import sys
+import re
+
+pattern = sys.argv[1]
+search_string = sys.argv[2]
+match = re.match(pattern, search_string)
+
+if match:
+    print(f"'{search_string}' matches pattern '{pattern}'")
+else:
+    print(f"'{search_string}' does not match pattern '{pattern}'")
+#+END_SRC
+
+#+BEGIN_SRC python
+def check_match(pattern, string="hello world"):
+    if re.match(pattern, string):
+        print(f"'{string}' matches pattern '{pattern}'")
+    else:
+        print(f"'{string}' does not match pattern '{pattern}'")
+
+
+# general
+check_match("hello worl")
+
+# string beginning and end
+check_match("^hello")
+check_match(".*world$")
+
+# character classes
+check_match("hel[lm]o world")
+
+# escaping characters
+check_match("0\.[0-9]{2}", "0.05")
+check_match("\s\d\w", " 1a")
+
+# matching multiple characters
+check_match("hel*o")
+check_match("hel+o")
+check_match("[a-z]+")
+
+# grouping patterns
+
+#+END_SRC

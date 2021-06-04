@@ -207,4 +207,136 @@ class UpdatedURL:
         self.timer = Timer(3600, self.update)
         self.timer.setDaemon(True)
         self.timer.start()
+
+u = UpdatedURL("http://dusty.phillips.codes")
+
+# fails due to timer object
+pickle.dumps(u)
+#+END_SRC
+
+* Serializing Web Objects
+
+#+BEGIN_SRC python
+import json
+from typing import Union
+
+class Contact:
+    def __init__(self, first, last):
+        self.first = first
+        self.last = last
+
+    @property
+    def full_name(self):
+        return(f"{self.first} {self.last}")
+
+c = Contact("John", "Smith")
+
+print(json.dumps(c.__dict__))
+
+# create a custom encoder to add fields
+class ContactEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Contact):
+            return {
+                "is_contact": True,
+                "first": obj.first,
+                "last": obj.last,
+                "full": obj.full_name
+            }
+        return super().default(obj)
+
+c = Contact("John", "Smith")
+
+print(json.dumps(c, cls=ContactEncoder))
+
+# decoding
+def decode_contact(contact: dict) -> Union[Contact, dict]:
+    if contact.get("is_contact"):
+        return Contact(contact["first"], contact["last"])
+    else:
+        return contact
+
+ex_data = json.dumps(c, cls=ContactEncoder)
+
+c = json.loads(ex_data, object_hook=decode_contact)
+print(c)
+print(c.full_name)
+#+END_SRC
+
+* Case Study
+
+We will build a regex powered template engine in Python. It will parse a text file (such as an HTML page) and replace certain directives with text calculated from the input to those directives.
+
+Here is the template:
+
+#+BEGIN_SRC txt :tangle template.txt
+/** include header.html **/
+<h1>This is the title of the front page</h1>
+/** include menu.html **/
+<p>My name is /** variable name **/.
+This is the content of my front page. It goes below the menu.</p>
+<table>
+<tr><th>Favourite Books</th></tr>
+/** loopover book_list **/
+<tr><td>/** loopvar **/</td></tr>
+/** endloop **/
+</table>
+/** include footer.html **/
+Copyright &copy; Today
+#+END_SRC
+
+- include: copy contents of another file here
+- variable: insert the contents of a variable here
+- loopover: repeat the contents of the loop for a variable that is a list
+- endloop: signal the end of looped text
+- loopvar: insert a single value from the list being looped over
+
+For variables to be passed in, we use a context file:
+
+#+BEGIN_SRC json :tangle contextfile.txt
+{
+    "name": "Michael",
+    "book_list": [
+	"Prometheus Rising",
+	"How Not to Die",
+	"Homo Deus",
+	"Getting Things Done"
+    ]
+}
+#+END_SRC
+
+#+BEGIN_SRC python :tangle template_processor.py
+# processing files and grabbing data from the cmd line
+import re
+import sys
+import json
+from pathlib import Path
+
+DIRECTIVE_RE = re.compile(
+    r"/\*\*\s*(include|variable|loopover|endloop|loopvar)"
+    r"\s*([^ *]*)\s*\*\*/"
+)
+
+class TemplateEngine:
+    def __init__(self, infilename, outfilename, contextfilename):
+        self.template = open(infilename).read()
+        self.working_dir = Path(infilename).absolute().parent
+        self.pos = 0
+        self.outfile = open(outfilename, "w")
+        with open(contextfilename) as contextfile:
+            self.context = json.load(contextfile)
+
+    def process(self):
+        print("Processing")
+        match = DIRECTIVE_RE.search(self.template, pos=self.pos)
+        while match:
+            self.outfile.write(self.template[self.pos:match.start()])
+            self.pos = match.end()
+            match = DIRECTIVE_RE.search(self.template, pos=self.pos)
+        self.outfile.write(self.template[self.pos:])
+
+if __name__ == '__main__':
+    infilename, outfilename, contextname = sys.argv[1:]
+    engine = TemplateEngine(infilename, outfilename, contextname)
+    engine.process()
 #+END_SRC

@@ -125,3 +125,86 @@ print(re.findall(regex, "abaracadabara"))
 #+END_SRC
 
 * Filesystem Paths
+
+#+BEGIN_SRC python
+import os
+import pathlib
+
+# os way
+print(path := os.path.abspath(os.sep.join([".", "subdir", "subsubdir"])))
+
+# pathlib
+path = (pathlib.Path(".") / "subdir" / "subsubdir" / "file.ext").absolute()
+print(path)
+
+# count the number of LOC excluding whitespace and comments in
+# all python files in the current directory and subdirectory
+def count_sloc(dir_path):
+    sloc = 0
+    for path in dir_path.iterdir():
+        if path.name.startswith("."):
+            continue
+        if path.is_dir():
+            sloc += count_sloc(path)
+            continue
+        if path.suffix != ".py":
+            continue
+        with path.open() as file:
+            for line in file:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    sloc += 1
+    return sloc
+
+# get working directory
+root_path = pathlib.Path(".")
+print(f"{count_sloc(root_path)} lines of python code")
+#+END_SRC
+
+* Serializing Objects
+
+#+BEGIN_SRC python
+import pickle
+
+some_data = ["a list", "containing", 5, "values including another list", ["inner", "list"]]
+
+# write
+with open("pickled_list", "wb") as file:
+    pickle.dump(some_data, file)
+
+# read
+with open("pickled_list", "rb") as file:
+    loaded_data = pickle.load(file)
+
+print(loaded_data)
+print(loaded_data == some_data)
+#+END_SRC
+
+* Customizing Pickles
+
+If an attribute is unpicklable, it usually has something to do with time sensitive attributes that it would not make sense to load in the future.
+For example, an open network socket, open file, running thread, or database connection.
+
+#+BEGIN_SRC python
+# load contents of a web page every hour
+from threading import Timer
+import datetime
+from urllib.request import urlopen
+
+class UpdatedURL:
+    def __init__(self, url):
+        self.url = url
+        self.contents = ""
+        self.last_updated = None
+        self.update()
+
+    def update(self):
+        self.contents = urlopen(self.url).read()
+        self.last_updated = datetime.datetime.now()
+        self.schedule()
+
+    def schedule(self):
+        self.timer = Timer(3600, self.update)
+        self.timer.setDaemon(True)
+        self.timer.start()
+#+END_SRC

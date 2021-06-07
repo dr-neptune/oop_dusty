@@ -55,3 +55,220 @@ for i in iterable:
 #+END_SRC
 
 * List Comprehensions
+
+#+BEGIN_SRC python
+# lame old way
+input_strings = ["1", "5", "28", "131", "3"]
+
+output_integers = []
+
+for num in input_strings:
+    output_integers.append(int(num))
+
+print(output_integers)
+
+# super cool list comp way
+output_integers = [int(i) for i in input_strings]
+
+# or with predicates
+output_integers = [int(i) for i in input_strings if len(i) < 3]
+#+END_SRC
+
+* Set and Dictionary Comprehensions
+
+#+BEGIN_SRC python
+from collections import namedtuple
+from os import replace
+
+Book = namedtuple("Book", "author title genre")
+
+books = [
+    Book("Pratchett", "Nightwatch", "fantasy"),
+    Book("Pratchett", "Thief Of Time", "fantasy"),
+    Book("Le Guin", "The Dispossessed", "scifi"),
+    Book("Le Guin", "A Wizard Of Earthsea", "fantasy"),
+    Book("Turner", "The Thief", "fantasy"),
+    Book("Phillips", "Preston Diamond", "western"),
+    Book("Phillips", "Twice Upon A Time", "scifi"),
+]
+
+# set comprehension
+fantasy_authors = {b.author for b in books if b.genre == "fantasy"}
+
+print(fantasy_authors)
+
+# dict comprehension uses :
+fantasy_titles = {b.title: b for b in books if b.genre == "fantasy"}
+print(fantasy_titles)
+#+END_SRC
+
+* Generator Expressions
+
+Generators don't create a final container object
+
+#+BEGIN_SRC python :tangle warning_checker.py
+# parse a log file and output a new log file that only contains the WARNING lines
+import sys
+
+inname = sys.argv[1]
+outname = sys.argv[2]
+
+with open(inname) as infile:
+    with open(outname, "w") as outfile:
+        warnings = (l for l in infile if "WARNING" in l)
+        for l in warnings:
+            outfile.write(l)
+#+END_SRC
+
+* Generators
+
+Generator Expressions compress the generator syntax into one line.
+
+#+BEGIN_SRC python
+import sys
+
+inname, outname = sys.argv[1:3]
+
+with open(inname) as infile:
+    with open(outname) as outfile:
+        warnings = (l.replace("\tWARNING", "") for l in infile if "WARNING" in l)
+        for l in warnings:
+            outfile.write(l)
+#+END_SRC
+
+OOP Approach:
+
+#+BEGIN_SRC python
+class WarningFilter:
+    def __init__(self, insequence):
+        self.insequence = insequence
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        l = self.insequence.readline()
+        while l and "WARNING" not in l:
+            l = self.insequence.readline()
+            if not l:
+                raise StopIteration
+            return l.replace("\tWARNING", "")
+
+with open(inname) as infile:
+    with open(outname, "w") as outfile:
+        filter = WarningFilter(infile)
+        for l in filter:
+            outfile.write(l)
+#+END_SRC
+
+Equivalent to the above:
+
+#+BEGIN_SRC python
+def warnings_filter(insequence):
+    for l in insequence:
+        if "WARNING" in l:
+            yield l.replace("\tWARNING", "")
+
+with open(inname) as infile:
+    with open(outname) as outfile:
+        filter = warnings_filter(infile)
+        for l in filter:
+            outfile.write(l)
+
+print(warnings_filter([]))
+#+END_SRC
+
+* Yield items from another iterable
+
+Often when we build a generator function, we end up in a situation where we want to yield data from another iterable object, possibly a list comprehension or generator expression we constructed inside of the generator, or perhaps some external items that we passed into the function.
+
+#+BEGIN_SRC python
+# generator can do basic setup before yielding info from another iterable
+def warnings_filter(infilename):
+    with open(infilename) as infile:
+        yield from (
+            l.replace("\tWARNING", "") for l in infile if "WARNING" in l
+        )
+
+filter = warnings_filter(inname)
+with open(outname, "w") as outfile:
+    for l in filter:
+        outfile.write(l)
+#+END_SRC
+
+The itertools.chain function yields data from iterables in sequence until they have all been exhausted.
+
+#+BEGIN_SRC python
+# walk a general tree
+# uses a filesystem as an example
+class File:
+    def __init__(self, name):
+        self.name = name
+
+class Folder(File):
+    def __init__(self, name):
+        super().__init__(name)
+        self.children = []
+
+root = Folder("")
+etc = Folder("etc")
+root.children.append(etc)
+etc.children.append(File("passwd"))
+etc.children.append(File("groups"))
+httpd = Folder("httpd")
+etc.children.append(httpd)
+httpd.children.append(File("http.conf"))
+var = Folder("var")
+root.children.append(var)
+log = Folder("log")
+var.children.append(log)
+log.children.append(File("messages"))
+log.children.append(File("kernel"))
+
+# output every file in the filesystem
+def walk(file):
+    if isinstance(file, Folder):
+        yield file.name + "/"
+        for f in file.children:
+            yield from walk(f)
+        else:
+            yield file.name
+
+print(*walk(root))
+#+END_SRC
+
+The yield from syntax is a useful shortcut when writing chained generators. It was added to the language to support coroutines.
+It is not used that much anymore because its been replaced with async and await syntax.
+
+* Coroutines
+
+#+BEGIN_SRC python
+# keep a running tally that can be increased by arbitrary values
+def tally():
+    score = 0
+    while True:
+        increment = yield score
+        score += increment
+
+white_sox = tally()
+blue_jays = tally()
+
+print(next(white_sox))
+print(next(blue_jays))
+
+print(white_sox.send(3))
+print(blue_jays.send(2))
+
+print(white_sox.send(2))
+print(blue_jays.send(4))
+#+END_SRC
+
+- yield occurs and the generator pauses
+- send() occurs from outside the function and the generator wakes up
+- The value sent in is assigned to the left side of the yield statement
+- The generator continues processing until it encounters another yield statement
+
+The difference between a generator and a coroutine:
+A generator only produces values, while a coroutine can also consume them.
+
+* Back to log parsing

@@ -305,6 +305,21 @@ For variables to be passed in, we use a context file:
 }
 #+END_SRC
 
+#+BEGIN_SRC html :tangle header.html
+<a href="link1.html">First Link</a>
+
+<a href="link2.html">Second Link</a>
+#+END_SRC
+
+#+BEGIN_SRC html :tangle menu.html
+<p>The menu mostly contains a lot of pasta</p>
+#+END_SRC
+
+#+BEGIN_SRC html :tangle footer.html
+<p>This footer is mostly just hot air</p>
+#+END_SRC
+
+
 #+BEGIN_SRC python :tangle template_processor.py
 # processing files and grabbing data from the cmd line
 import re
@@ -327,13 +342,47 @@ class TemplateEngine:
             self.context = json.load(contextfile)
 
     def process(self):
+        """delegate a different method on the class depending on the directive"""
         print("Processing")
         match = DIRECTIVE_RE.search(self.template, pos=self.pos)
         while match:
             self.outfile.write(self.template[self.pos:match.start()])
-            self.pos = match.end()
+            directive, argument = match.groups()
+            method_name = f"process_{directive}"
+            getattr(self, method_name)(match, argument)
             match = DIRECTIVE_RE.search(self.template, pos=self.pos)
         self.outfile.write(self.template[self.pos:])
+
+    def process_include(self, match, argument):
+        """adds an include directives code to the template"""
+        with (self.working_dir / argument).open() as includefile:
+            self.outfile.write(includefile.read())
+            self.pos = match.end()
+
+    def process_variable(self, match, argument):
+        """finds the given variable and places it in the template"""
+        self.outfile.write(self.context.get(argument, ""))
+        self.pos = match.end()
+
+    def process_loopover(self, match, argument):
+        self.loop_index = 0
+        self.loop_list = self.context.get(argument, [])
+        self.pos = self.loop_pos = match.end()
+
+    def process_loopvar(self, match, argument):
+        self.outfile.write(self.loop_list[self.loop_index])
+        self.pos = match.end()
+
+    def process_endloop(self, match, argument):
+        self.loop_index += 1
+        if self.loop_index >= len(self.loop_list):
+            self.pos = match.end()
+            del self.loop_index
+            del self.loop_list
+            del self.loop_pos
+        else:
+            self.pos = self.loop_pos
+
 
 if __name__ == '__main__':
     infilename, outfilename, contextname = sys.argv[1:]

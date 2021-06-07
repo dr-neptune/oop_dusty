@@ -1,0 +1,57 @@
+#+TITLE: The Iterator Pattern
+
+We will cover:
+- What design patterns are
+- The iterator protocol
+- List, set, and dictionary comprehensions
+- Generators and coroutines
+
+* Iterators
+
+An iterator is an object with a next() method and a done() method.
+The latter returns True if there are no items left in the sequence.
+
+In python, the next method is named __next__ and is called with next(iterator).
+Rather than a done method, python's iterator protocol raises StopIteration to notify the loop that it has completed.
+
+* The iterator protocol
+
+#+BEGIN_SRC python
+# verbose implementation
+class CapitalIterable:
+    def __init__(self, string):
+        self.string = string
+
+    def __iter__(self):
+        return CapitalIterator(self.string)
+
+class CapitalIterator:
+    def __init__(self, string):
+        self.words = [w.capitalize() for w in string.split()]
+        self.index = 0
+
+    def __next__(self):
+        if self.index == len(self.words):
+            raise StopIteration
+        word = self.words[self.index]
+        self.index += 1
+        return word
+
+    def __iter__(self):
+        return self
+
+# use
+iterable = CapitalIterator("the quick brown fox jumps over the lazy dog")
+iterator = iter(iterable)
+while True:
+    try:
+        print(next(iterator))
+    except StopIteration:
+        break
+
+# alternatively
+for i in iterable:
+    print(i)
+#+END_SRC
+
+* List Comprehensions

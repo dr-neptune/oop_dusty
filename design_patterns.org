@@ -1,0 +1,18 @@
+#+TITLE: Python Design Patterns 1 & 2
+
+In this chapter(s), we will see:
+- Specific design patterns
+- A canonical implementation of each pattern in Python
+- Python syntax to replace certain patterns
+
+* The Decorator Pattern
+
+The decorator pattern allows us to wrap an object that provides core functionality with other objects that alter this functionality.
+
+The two primary uses of the decorator pattern:
+- Enhancing the response of a component as it sends data to a second component
+- Supporting multiple optional behaviors
+
+The second option is often a suitable alternative to multiple inheritance.
+
+* A Decorator Example

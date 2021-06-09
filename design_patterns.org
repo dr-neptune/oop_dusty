@@ -16,3 +16,126 @@ The two primary uses of the decorator pattern:
 The second option is often a suitable alternative to multiple inheritance.
 
 * A Decorator Example
+
+#+BEGIN_SRC python :tangle inbound.py
+########################################################################################
+# Waits for a connection from a client and then prompts the user for a string response #
+########################################################################################
+import socket
+from decs import LogSocket
+
+def respond(client):
+    response = input("Enter a value: ")
+    client.send(bytes(response, "utf8"))
+    client.close()
+
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind(("localhost", 2401))
+server.listen(1)
+
+
+try:
+    while True:
+        client, addr = server.accept()
+        # hypothetical config file
+        # if log_send:
+        #     client = LogSocket(client)
+        # if client.getpeername()[0] in compress_hosts:
+        #     client = GzipSocket(client)
+        respond(LogSocket(client))
+finally:
+    server.close()
+#+END_SRC
+
+#+BEGIN_SRC python :tangle outbound.py
+###############################################################################
+#                Connects to port 2401 and outputs the response               #
+###############################################################################
+import socket
+import decs
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client.connect(("localhost", 2401))
+print(f"Received:\t{client.recv(1024)}")
+client.close()
+#+END_SRC
+
+We will create a pair of decorators that customize the socket behavior without having to extend or modify the socket itself.
+
+#+BEGIN_SRC python :tangle decs.py
+###############################################################################
+#                            Decorators for Sockets                           #
+###############################################################################
+import gzip
+from io import BytesIO
+
+
+class LogSocket:
+    # Creates a log of the data sent to a peer ################################
+    def __init__(self, socket):
+        self.socket = socket
+
+    def send(self, data):
+        print(f"Sending {data} to {self.socket.getpeername()[0]}")
+        self.socket.send(data)
+
+    def close(self):
+        self.socket.close()
+
+
+class GzipSocket:
+    # compresses the incoming data before sending it on the the client ########
+    def __init__(self, socket):
+        self.socket = socket
+
+    def send(self, data):
+        buf = BytesIO()
+        zipfile = gzip.GzipFile(fileobj=buf, mode="w")
+        zipfile.write(data)
+        zipfile.close()
+        self.socket.send(buf.getvalue())
+
+    def close(self):
+        self.socket.close()
+#+END_SRC
+
+* Decorators in Python
+
+#+BEGIN_SRC python
+import time
+
+def log_calls(func):
+    def wrapper(*args, **kwargs):
+        now = time.time()
+        print(f"Calling {func.__name__} with {args} and {kwargs}")
+        return_value = func(*args, **kwargs)
+        print(f"Executed {func.__name__} in {time.time() - now} ms")
+        return return_value
+    return wrapper
+
+def test1(a, b, c):
+    print("\ttest1 called")
+
+def test2(a, b):
+    print("\ttest2 called")
+
+def test3(a, b):
+    print("\ttest3 called")
+    time.sleep(1)
+
+t1, t2, t3 = log_calls(test1), log_calls(test2), log_calls(test3)
+
+t1(1, 2, 3)
+t2(4, b=5)
+t3(6, 7)
+
+# alternatively
+@log_calls
+def test4(a, b):
+    print("\ttest4 called")
+
+test4(8, 8)
+#+END_SRC
+
+* The Observer Pattern

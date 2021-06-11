@@ -399,3 +399,51 @@ The state pattern is designed to allow switching between different states dynami
 This is totally doable.
 
 * The Singleton Pattern
+
+The basic idea behind the singleton pattern is to allow one instance of a certain object to exist.
+Typically this is a sort of manager class. Such objects often need to be referenced by a wide variety of other objects. When a singleton is used, the separate objects request the single instance of the manager object from the class, so a reference need not be passed around.
+
+* Singleton Implementation
+
+Python doesn't have private constructors, but we can use the __new__ class method to ensure that only one instance is ever created.
+
+#+BEGIN_SRC python
+
+class OneOnly:
+    _singleton = None
+    def __new__(cls, *args, **kwargs):
+        if not cls._singleton:
+            cls._singleton = super(OneOnly, cls).__new__(cls, *args, **kwargs)
+        return cls._singleton
+
+o1 = OneOnly()
+print(o1)
+o2 = OneOnly()
+print(o2)
+print(o1 == o2)
+#+END_SRC
+
+* Module variables can mimic singletons
+
+To use module-level variables instead of a singleton, we instantiate an instance of the class after we've defined it.
+
+We can improve our state pattern to use singletons. Instead of creating a new object every time we change states, we can create a module level variable that is always accessible.
+
+#+BEGIN_SRC python
+# add all the state pattern code here
+# Node
+# FirstTag
+# ChildNode
+# OpenTag
+# TextNode
+# CloseTag
+
+# then instantiate a module level variable for reuse
+first_tag = FirstTag()
+child_node = ChildNode()
+text_node = TextNode()
+open_tag = OpenTag()
+close_tag = CloseTag()
+#+END_SRC
+
+* The Template Pattern

@@ -251,3 +251,151 @@ class ScaledStrategy:
 #+END_SRC
 
 * The State Pattern
+
+The goal of the state pattern is to represent state-transition systems.
+
+
+#+DOWNLOADED: /tmp/screenshot.png @ 2021-06-11 08:28:16
+[[file:The State Pattern/screenshot_2021-06-11_08-28-16.png]]
+
+* A state example
+
+To illustrate the state pattern, we will build an xml parsing tool. The context class will be the parser itself.
+
+#+BEGIN_SRC txt
+<book>
+  <author>Dusty Phillips</author>
+  <publisher>Packt Publishing</publisher>
+  <title>PyOOP</title>
+  <content>
+    <chapter>
+      <number>1</number>
+      <title>OOPity Scoop</title>
+    </chapter>
+    <chapter>
+      <number>2</number>
+      <title>Oop diddy woop</title>
+    </chapter>
+  </content>
+</book>
+#+END_SRC
+
+We want the output of the program to be a tree of Node objects
+
+#+DOWNLOADED: /tmp/screenshot.png @ 2021-06-11 08:35:40
+[[file:A state example/screenshot_2021-06-11_08-35-40.png]]
+
+#+BEGIN_SRC python :tangle xml_parser.py
+class Node:
+    def __init__(self, tag_name, parent=None):
+        self.parent = parent
+        self.tag_name = tag_name
+        self.children = []
+        self.text = ""
+
+    def __str__(self):
+        if self.text:
+            return self.tag_name + ": " + self.text
+        else:
+            return self.tag_name
+
+
+class Parser:
+    def __init__(self, parse_string):
+        self.parse_string = parse_string
+        self.root = None
+        self.current_node = None
+        self.state = FirstTag()
+
+    def process(self, remaining_string):
+        remaining = self.state.process(remaining_string, self)
+        if remaining:
+            self.process(remaining)
+
+    def start(self):
+        self.process(self.parse_string)
+
+
+class FirstTag:
+    def process(self, remaining_string, parser):
+        i_start_tag = remaining_string.find("<")
+        i_end_tag = remaining_string.find(">")
+        tag_name = remaining_string[i_start_tag + 1 : i_end_tag]
+        root = Node(tag_name)
+        parser.root = parser.current_node = root
+        parser.state = ChildNode()
+        return remaining_string[i_end_tag + 1:]
+
+
+class ChildNode:
+    def process(self, remaining_string, parser):
+        # remove whitespace from string
+        stripped = remaining_string.strip()
+        if stripped.startswith("</"):
+            parser.state = CloseTag()
+        elif stripped.startswith("<"):
+            parser.state = OpenTag()
+        else:
+            parser.state = TextNode()
+        return stripped
+
+
+class OpenTag:
+    def process(self, remaining_string, parser):
+        i_start_tag = remaining_string.find("<")
+        i_end_tag = remaining_string.find(">")
+        tag_name = remaining_string[i_start_tag + 1 : i_end_tag]
+        node = Node(tag_name, parser.current_node)
+        parser.current_node.children.append(node)
+        parser.current_node = node
+        parser.state = ChildNode()
+        return remaining_string[i_end_tag + 1:]
+
+
+class CloseTag:
+    def process(self, remaining_string, parser):
+        i_start_tag = remaining_string.find("<")
+        i_end_tag = remaining_string.find(">")
+        # assert remaining_string[i_start_tag + 1] == "/"
+        tag_name = remaining_string[i_start_tag + 1 : i_end_tag]
+        # assert tag_name == parser.current_node.tag_name
+        parser.current_node = parser.current_node.parent
+        parser.state = ChildNode()
+        return remaining_string[i_end_tag + 1 :].strip()
+
+
+class TextNode:
+    def process(self, remaining_string, parser):
+        i_start_tag = remaining_string.find("<")
+        text = remaining_string[:i_start_tag]
+        parser.current_node.text = text
+        parser.state = ChildNode()
+        return remaining_string[i_start_tag:]
+
+
+if __name__ == '__main__':
+    import sys
+
+    with open(sys.argv[1]) as file:
+        contents = file.read()
+        p = Parser(contents)
+        p.start()
+
+        nodes = [p.root]
+        while nodes:
+            node = nodes.pop(0)
+            print(node)
+            nodes = node.children + nodes
+#+END_SRC
+
+* State vs Strategy
+
+The strategy pattern is used to choose an algorithm at runtime; generally only one of those algorithms is going to be chosen for a particular use case.
+
+The state pattern is designed to allow switching between different states dynamically, as some process evolves.
+
+* State transition as coroutines
+
+This is totally doable.
+
+* The Singleton Pattern

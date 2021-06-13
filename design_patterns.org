@@ -447,3 +447,155 @@ close_tag = CloseTag()
 #+END_SRC
 
 * The Template Pattern
+
+The template pattern is useful for removing duplicate code. It is designed for situations where we have several different tasks to accomplish that have some, but not all, steps in common. The common steps are implemented in a base class, and the distinct steps are overridden in subclasses to provide custom behavior.
+
+* A Template Example
+
+We will create a car sales reporter as an example.
+
+We have two common tasks to perform:
+
+- Select all sales of new vehicles and output them to the screen in a csv format
+- Output a csv list of all salespeople with their gross sales and save it to a file that can be imported to a spreadsheet.
+
+In both cases we need to:
+
+1. Connect to the database
+2. Construct a query for new vehicles or gross sales
+3. Issue the query
+4. Format the results into a comma delimited string
+5. Output the data to a file or email
+
+Before we start, let's create a database and put some sample data in it.
+
+#+BEGIN_SRC python
+import sqlite3
+
+conn = sqlite3.connect("sales.db")
+
+conn.execute("CREATE TABLE Sales (salesperson text, amt currency, year integer, model text, new boolean)")
+conn.execute("INSERT INTO Sales values ('Tim', 9000, 2006, 'Ford Focus', 'false')")
+conn.execute("INSERT INTO Sales values ('Tim', 16000, 2010, 'Honda Fit', 'true')")
+conn.execute("INSERT INTO Sales values ('Gayle', 8000, 2004, 'Dodge Neon', 'false')")
+conn.execute("INSERT INTO Sales values ('Gayle', 28000, 2009, 'Ford Mustang', 'true')")
+conn.execute("INSERT INTO Sales values ('Gayle', 50000, 2010, 'Lincoln Navigator', 'true')")
+conn.execute("INSERT INTO Sales values ('Don', 20000, 2008, 'Toyota Prius', 'false')")
+conn.commit()
+conn.close()
+#+END_SRC
+
+#+BEGIN_SRC python
+import datetime as dt
+
+
+class QueryTemplate:
+    def connect(self):
+        self.conn = sqlite3.connect("sales.db")
+
+    def construct_query(self):
+        """For use by a subclass"""
+        raise NotImplementedError()
+
+    def do_query(self):
+        results = self.conn.execute(self.query)
+        self.results = results.fetchall()
+
+    def format_results(self):
+        output = []
+        for row in self.results:
+            row = [str(i) for i in row]
+            output.append(", ".join(row))
+        self.formatted_results = "\n".join(output)
+
+    def output_results(self):
+        """For use by a subclass"""
+        raise NotImplementedError()
+
+    def process_format(self):
+        self.connect()
+        self.construct_query()
+        self.do_query()
+        self.format_results()
+        self.output_results()
+
+
+class NewVehiclesQuery(QueryTemplate):
+    def construct_query(self):
+        self.query = "select * from Sales where new='true'"
+
+    def output_results(self):
+        print(self.formatted_results)
+
+
+class UserGrossQuery(QueryTemplate):
+    def construct_query(self):
+        self.query = ("select salesperson, sum(amt) from Sales group by salesperson")
+
+    def output_results(self):
+        filename = f"gross_sales_{dt.date.today().strftime('%Y%m%d')}"
+        with open(filename, "w") as outfile:
+            outfile.write(self.formatted_results)
+
+
+new_vehicles = NewVehiclesQuery()
+gross_user = UserGrossQuery()
+
+print(gross_user.process_format())
+print(new_vehicles.process_format())
+#+END_SRC
+
+Now onto chapter 11: Python Design Patterns II
+
+* The Adapter Pattern
+
+Adapters are used to allow two preexisting objects to work together, even if their interfaces are not compatible.
+
+Decorators typically provide the same interface that they replace, whereas adapters map between two different interfaces.
+
+#+BEGIN_SRC python
+class AgeCalculator:
+    def __init__(self, birthday):
+        self.year, self.month, self.day = (int(x) for x in birthday.split("-"))
+
+    def calculate_age(self, date):
+        year, month, day = (int(x) for x in date.split("-"))
+        age = year - self.year
+        if (month, day) < (self.month, self.day):
+            age -= 1
+        return age
+#+END_SRC
+
+Instead of the above, we should use the datetime library. Instead of refactoring that, we could make an adaptor:
+
+#+BEGIN_SRC python
+import datetime
+
+class DateAgeAdapter:
+    def _str_date(self, date):
+        return date.strftime("%Y-%m-%d")
+
+    def __init__(self, birthday):
+        birthday = self._str_date(birthday)
+        self.calculator = AgeCalculator(birthday)
+
+    def get_age(self, date):
+        date = self._str_date(date)
+        return self.calculator.calculate_age(date)
+#+END_SRC
+
+This adapter converts datetime.date and datetime.time into a string that our original AgeCalculator can use.
+
+#+BEGIN_SRC python
+# alternatively to the DateAgeAdapter
+class AgreeableDate(datetime.date):
+    def split(self, char):
+        return self.year, self.month, self.day
+
+bd = AgreeableDate(1975, 6, 14)
+today = AgreeableDate.today()
+print(today)
+
+a = AgeCalculator(bd)
+print(a.calculate_age(today))
+#+END_SRC

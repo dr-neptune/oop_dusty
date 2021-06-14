@@ -649,3 +649,80 @@ print(woo.send_email("yes@mailbox.org", "hi", "hello there"))
 #+END_SRC
 
 * The Flyweight Pattern
+
+The flyweight pattern is a memory optimization pattern. It ensures that objects that share a state can use the same memory for that shared state.
+
+The WeakValueDictionary allows us to store items in a dictionary without the garbage collector caring about them. If there are no other references to that object stored anywhere in the application, the garbage collector will eventually clean up for us.
+
+#+BEGIN_SRC python
+import weakref
+
+class CarModel:
+    """
+    Whenever we construct a new flyweight with a given name, we first look up that name
+    in a weak referenced dictionary. If it exists, we return that model. If not, we create
+    a new one.
+    """
+    _models = weakref.WeakValueDictionary()
+
+    def __new__(cls, model_name, *args, **kwargs):
+        model = cls._models.get(model_name)
+        if not model:
+            model = super().__new__(cls)
+            cls._models[model_name] = model
+        return model
+
+    def __init__(self,
+                 model_name,
+                 air=False,
+                 tilt=False,
+                 cruise_control=False,
+                 power_locks=False,
+                 alloy_wheels=False,
+                 usb_charger=False):
+        if not hasattr(self, "initted"):
+            self.model_name = model_name
+            self.air = air
+            self.tilt = tilt
+            self.cruise_control = cruise_control
+            self.power_locks = power_locks
+            self.alloy_wheels = alloy_wheels
+            self.usb_charger = usb_charger
+            self.initted = True
+
+    def check_serial(self, serial_number):
+        print(
+            f"Sorry, we are unable to check the serial number {serial_number} on the {self.model_name} at this time"
+        )
+
+
+class Car:
+    def __init__(self, model, color, serial):
+        self.model = model
+        self.color = color
+        self.serial = serial
+
+    def check_serial(self):
+        return self.model.check_serial(self.serial)
+
+
+dx = CarModel("FIT DX")
+lx = CarModel("FIT LX", air=True, cruise_control=True)
+
+car1 = Car(dx, "blue", "12345")
+car2 = Car(dx, "black", "12346")
+car3 = Car(lx, "red", "12347")
+
+# demonstrate weak referencing
+print(id(lx))
+del lx
+del car3
+import gc
+gc.collect()
+
+lx = CarModel("FIT LX", air=True, cruise_control=True, power_locks=True, tilt=True)
+print(id(lx))
+print(lx.air)
+#+END_SRC
+
+* The Command Pattern

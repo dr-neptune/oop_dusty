@@ -22,6 +22,7 @@ The second option is often a suitable alternative to multiple inheritance.
 # Waits for a connection from a client and then prompts the user for a string response #
 ########################################################################################
 import socket
+from urllib.request import HTTPPasswordMgr
 from decs import LogSocket
 
 def respond(client):
@@ -599,3 +600,52 @@ print(today)
 a = AgeCalculator(bd)
 print(a.calculate_age(today))
 #+END_SRC
+
+* The Facade Pattern
+
+The facade pattern is designed to provide a simple interface to a complex system of components.
+It is, in many ways, like an adapter. The primary difference is that a facade tries to abstract a simpler interface out of a complex one, while an adapter only tries to map one existing interface to another.
+
+#+BEGIN_SRC python
+import smtplib
+import imaplib
+
+class EmailFacade:
+    def __init__(self, host, username, password):
+        self.host = host
+        self.username = username
+        self.password = password
+
+    def send_email(self, to_email, subject, message):
+        """Send an email"""
+        if not "@" in self.username:
+            from_email = f"{self.username}@{self.host}"
+        else:
+            from_email = self.username
+
+        message = f"From: {from_email}\r\n To: {to_email}\r\n Subject: {subject}\r\n\r\n{message}"
+
+        smtp = smtplib.SMTP(self.host)
+        smtp.login(self.username, self.password)
+        smtp.sendmail(from_email, [to_email], message)
+
+    def get_inbox(self):
+        """get messages in inbox"""
+        mailbox = imaplib.IMAP4(self.host)
+        mailbox.login(bytes(self.username, "utf8"),
+                      bytes(self.password, "utf8"))
+        mailbox.select()
+        x, data = mailbox.search(None, "ALL")
+        messages = []
+        for num in data[0].split():
+            x, message = mailbox.fetch(num, "(RFC822)")
+            messages.append(message[0][1])
+        return messages
+
+woo = EmailFacade("localhost", "moop", "boop")
+
+# needs an smtp connection
+print(woo.send_email("yes@mailbox.org", "hi", "hello there"))
+#+END_SRC
+
+* The Flyweight Pattern

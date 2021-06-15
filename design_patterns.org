@@ -862,3 +862,95 @@ shortcut.command = save_command
 #+END_SRC
 
 * The Abstract Factory Pattern
+
+The abstract factory pattern is normally used when we have multiple possible implementations of a system that depend on some configuration or platform issue.
+
+#+BEGIN_SRC python
+# set up formatters
+class DateFormatter:
+    @classmethod
+    def format_date(self, y, m, d):
+        y, m, d = (str(x) for x in (y, m, d))
+        y = "20" + y if len(y) == 2 else y
+        m = "0" + m if len(m) == 1 else m
+        d = "0" + d if len(d) == 1 else d
+        return y, m, d
+
+
+class FranceDateFormatter(DateFormatter):
+    def format_date(self, y, m, d):
+        y, m, d = super().format_date(y, m, d)
+        return f"{d}/{m}/{y}"
+
+
+frdate = FranceDateFormatter().format_date(m=12, d=2, y=1991)
+usdate = USADateFormatter().format_date(m=12, d=2, y=1991)
+
+
+class USADateFormatter(DateFormatter):
+    def format_date(self, y, m, d):
+        y, m, d = super().format_date(y, m, d)
+        return f"{m}-{d}-{y}"
+
+
+class CurrencyFormatter:
+    @classmethod
+    def format_currency(self, base, cents):
+        base, cents = (str(x) for x in (base, cents))
+        if len(cents) == 0:
+            cents = "00"
+        elif len(cents) == 1:
+            cents = "0" + cents
+
+        digits = []
+        for i, c in enumerate(reversed(base)):
+            if i and not i % 3:
+                digits.append(" ")
+            digits.append(c)
+        base = "".join(reversed(digits))
+        return base, cents
+
+
+class FranceCurrencyFormatter(CurrencyFormatter):
+    def format_currency(self, base, cents):
+        base, cents = super().format_currency(base, cents)
+        return f"{base}€{cents}"
+
+
+class USACurrencyFormatter(CurrencyFormatter):
+    def format_currency(self, base, cents):
+        base, cents = super().format_currency(base, cents)
+        return f"${base}.{cents}"
+
+
+frcurr = FranceCurrencyFormatter().format_currency(100, 20)
+uscurr = USACurrencyFormatter().format_currency(100, 20)
+
+
+# now set up formatter factories
+class USAFormatterFactory:
+    def create_date_formatter(self):
+        return USADateFormatter()
+
+    def create_currency_formatter(self):
+        return USACurrencyFormatter()
+
+
+class FranceFormatterFactory:
+    def create_date_formatter(self):
+        return FranceDateFormatter()
+
+    def create_currency_formatter(self):
+        return FranceCurrencyFormatter()
+
+# above only needs to be set up once
+country_code = "US"
+factory_map = {"US": USAFormatterFactory,
+               "FR": FranceFormatterFactory}
+
+formatter_factory = factory_map.get(country_code)()
+
+print(formatter_factory.create_currency_formatter().format_currency(100, 20))
+#+END_SRC
+
+* The Composite Pattern

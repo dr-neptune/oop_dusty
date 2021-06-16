@@ -133,3 +133,193 @@ class TestNumbers:
 #+END_SRC
 
 * One way to do setup and cleaning
+
+#+BEGIN_SRC python :tangle setup_teardown.py
+import pytest
+
+def setup_module(module):
+    print(f"Setting up Module: {module.__name__}")
+
+def teardown_module(module):
+    print(f"Tearing down Module: {module.__name__}")
+
+def test_a_function():
+    print("Running test function")
+
+class BaseTest:
+    def setup_class(cls):
+        print(f"Setting up Class: {cls.__name__}")
+
+    def teardown_class(cls):
+        print(f"Tearing down Class: {cls.__name__}")
+
+    def setup_method(self, method):
+        print(f"Setting up Method: {method.__name__}")
+
+    def teardown_method(self, method):
+        print(f"Tearing down Method: {method.__name__}")
+
+
+class TestClass1(BaseTest):
+    def test_method(self):
+        print("Running Method 1-1")
+
+    def test_method_2(self):
+        print("Running Method 2-1")
+
+class TestClass2(BaseTest):
+    def test_method(self):
+        print("Running Method 2-1")
+
+    def test_method_2(self):
+        print("Running Method 2-2")
+#+END_SRC
+
+Running the script above as pytest -s setup_teardown.py nets the following output:
+
+#+BEGIN_SRC txt
+============================= test session starts ==============================
+platform linux -- Python 3.8.6, pytest-6.2.3, py-1.10.0, pluggy-0.13.1
+rootdir: /home/michael/Documents/oop_dusty
+plugins: xdoctest-0.15.4, Faker-8.1.0, typeguard-2.11.1, cov-2.12.1
+collected 5 items
+
+setup_teardown.py Setting up Module: setup_teardown
+Running test function
+.Setting up Class: TestClass1
+Setting up Method: test_method
+Running Method 1-1
+.Tearing down Method: test_method
+Setting up Method: test_method_2
+Running Method 2-1
+.Tearing down Method: test_method_2
+Tearing down Class: TestClass1
+Setting up Class: TestClass2
+Setting up Method: test_method
+Running Method 2-1
+.Tearing down Method: test_method
+Setting up Method: test_method_2
+Running Method 2-2
+.Tearing down Method: test_method_2
+Tearing down Class: TestClass2
+Tearing down Module: setup_teardown
+
+
+============================== 5 passed in 0.05s ===============================
+#+END_SRC
+
+* A completely different way to set up variables
+
+One of the most common uses for the various setup and teardown functions is to ensure certain class or module variables are available with a known value before each test method is run.
+
+Pytest offers a way of doing this known as fixtures.
+
+#+BEGIN_SRC python
+import pytest
+from stats import StatsList
+
+@pytest.fixture
+def valid_stats():
+    return StatsList([1, 2, 2, 3, 3, 4])
+
+def test_mean(valid_stats):
+    assert valid_stats.mean == 2.5
+
+def test_median(valid_stats):
+    assert valid_stats.median() == 2.5
+    valid_stats.append(4)
+    assert valid_stats.median() == 3
+
+def teset_mode(valid_stats):
+    assert valid_stats.mode() == [2, 3]
+    valid_stats.remove(2)
+    assert valid_stats.mode() == [3]
+#+END_SRC
+
+If we implement the fixture as a generator, we can run cleanup code after each test is run.
+This provides the equivalent of a teardown method, except on a per-fixture basis.
+We can use it to clean up files, close connections, empty lists, or reset queues.
+
+#+BEGIN_SRC python
+import pytest
+import tempfile
+import shutil
+import os.path
+
+@pytest.fixture
+def temp_dir(request):
+    dir = tempfile.mkdtemp()
+    print(dir)
+    yield dir
+    shutil.rmtree(dir)
+
+def test_osfiles(temp_dir):
+    os.mkdir(os.path.join(temp_dir, "a"))
+    os.mkdir(os.path.join(temp_dir, "b"))
+    dir_contents = os.listdir(temp_dir)
+    assert len(dir_contents) == 2
+    assert "a" in dir_contents
+    assert "b" in dir_contents
+#+END_SRC
+
+We can pass a scope parameter to create a fixture that lasts longer than one test.
+This is useful when setting up an expensive operation that can be reused by multiple tests, as long as the resource reuse
+doesn't break the atomic or unit nature of the tests.
+
+Suppose we were to test the following server, and we only want to run one instance of the server in a separate process and have multiple tests connect to that instance:
+
+#+BEGIN_SRC python :tangle echo_server.py
+# listens on port 1028.
+# when it receives inut, send the same value back
+import socket
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("localhost", 1028))
+s.listen(1)
+
+while True:
+    client, address = s.accept()
+    data = client.recv(1024)
+    client.send(data)
+    client.close()
+#+END_SRC
+
+Then we can make the tests:
+
+#+BEGIN_SRC python :tangle echo_test.py
+import subprocess
+import socket
+import time
+import pytest
+
+
+# run only once for the entire test session
+@pytest.fixture(scope="session")
+def echoserver():
+    print("Loading server")
+    p = subprocess.Popen(["python3", "echo_server.py"])
+    time.sleep(1)
+    yield p
+    p.terminate()
+
+
+@pytest.fixture
+def clientsocket(request):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("localhost", 1028))
+    yield s
+    s.close()
+
+
+def test_echo(echoserver, clientsocket):
+    clientsocket.send(b"abc")
+    assert clientsocket.recv(3) == b"abc"
+
+
+def test_echo2(echoserver, clientsocket):
+    clientsocket.send(b"def")
+    assert clientsocket.recv(3) == b"def"
+#+END_SRC
+
+* Skipping Tests with Pytest

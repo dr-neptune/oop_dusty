@@ -415,3 +415,151 @@ A popular library is coverage.py
 pytest also has a code coverage feature in which you can call coverage.py from pytest with some extra pytest options.
 
 * Case Study
+
+We will walk through test-driven development by writing a small, tested cryptography application.
+
+#+BEGIN_SRC python
+initial_str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+encoding_table = ""
+
+for i in range(26):
+    encoding_table += initial_str[i:] + initial_str[:i] + "\n"
+
+print("\n\n", encoding_table)
+#+END_SRC
+
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+BCDEFGHIJKLMNOPQRSTUVWXYZA
+CDEFGHIJKLMNOPQRSTUVWXYZAB
+DEFGHIJKLMNOPQRSTUVWXYZABC
+EFGHIJKLMNOPQRSTUVWXYZABCD
+FGHIJKLMNOPQRSTUVWXYZABCDE
+GHIJKLMNOPQRSTUVWXYZABCDEF
+HIJKLMNOPQRSTUVWXYZABCDEFG
+IJKLMNOPQRSTUVWXYZABCDEFGH
+JKLMNOPQRSTUVWXYZABCDEFGHI
+KLMNOPQRSTUVWXYZABCDEFGHIJ
+LMNOPQRSTUVWXYZABCDEFGHIJK
+MNOPQRSTUVWXYZABCDEFGHIJKL
+NOPQRSTUVWXYZABCDEFGHIJKLM
+OPQRSTUVWXYZABCDEFGHIJKLMN
+PQRSTUVWXYZABCDEFGHIJKLMNO
+QRSTUVWXYZABCDEFGHIJKLMNOP
+RSTUVWXYZABCDEFGHIJKLMNOPQ
+STUVWXYZABCDEFGHIJKLMNOPQR
+TUVWXYZABCDEFGHIJKLMNOPQRS
+UVWXYZABCDEFGHIJKLMNOPQRST
+VWXYZABCDEFGHIJKLMNOPQRSTU
+WXYZABCDEFGHIJKLMNOPQRSTUV
+XYZABCDEFGHIJKLMNOPQRSTUVW
+YZABCDEFGHIJKLMNOPQRSTUVWX
+ZABCDEFGHIJKLMNOPQRSTUVWXY
+
+Given a keyword, TRAIN, we can encode the message ENCODED IN PYTHON as follows:
+
+1. Repeat the keyword and message together, such that it is easy to map letters from one to the other:
+ENCODEDINPYTHON
+TRAINTRAINTRAIN
+
+2. For each letter in the plaintext, find the row that begins with that letter in the table
+
+3. Find the column with the letter associated with the keyword letter for the chosen plaintext letter
+
+4. The encoded character is at the intersection of this row and column
+
+XECWQXUIVCRKHWA
+
+* Implementing It
+
+#+BEGIN_SRC python :tangle test_crypt.py
+import pytest
+from cipher import VigenereCipher, combine_character, separate_character
+
+def test_encode():
+    cipher = VigenereCipher("TRAIN")
+    encoded = cipher.encode("ENCODEDINPYTHON")
+    assert encoded == "XECWQXUIVCRKHWA"
+
+def test_encode_character():
+    cipher = VigenereCipher("TRAIN")
+    encoded = cipher.encode("E")
+    assert encoded == "X"
+
+def test_encode_spaces():
+    cipher = VigenereCipher("TRAIN")
+    encoded = cipher.encode("ENCODED IN PYTHON")
+    assert encoded == "XECWQXUIVCRKHWA"
+
+def test_encode_lowercase():
+    cipher = VigenereCipher("TRain")
+    encoded = cipher.encode("encoded in Python")
+    assert encoded == "XECWQXUIVCRKHWA"
+
+def test_combine_character():
+    assert combine_character("E", "T") == "X"
+    assert combine_character("N", "R") == "E"
+
+def test_extend_keyword():
+    cipher = VigenereCipher("TRAIN")
+    extended = cipher.extend_keyword(16)
+    assert extended == "TRAINTRAINTRAINT"
+
+def test_separate_character():
+    assert separate_character("X", "T") == "E"
+    assert separate_character("E", "R") == "N"
+
+def test_decode():
+    cipher = VigenereCipher("TRAIN")
+    decoded = cipher.decode("XECWQXUIVCRKHWA")
+    assert decoded == "ENCODEDINPYTHON"
+#+END_SRC
+
+#+BEGIN_SRC python :tangle cipher.py
+class VigenereCipher:
+    def __init__(self, keyword):
+        self.keyword = keyword
+
+    def _code(self, text, combine_func):
+        text = text.replace(" ", "").upper()
+        combined = []
+        keyword = self.extend_keyword(len(text))
+        for p,k in zip(text, keyword):
+            combined.append(combine_func(p,k))
+        return "".join(combined)
+
+    def encode(self, plaintext):
+        return self._code(plaintext, combine_character)
+
+    def extend_keyword(self, number):
+        repeats = number // len(self.keyword) + 1
+        return (self.keyword * repeats)[:number]
+
+    def decode(self, ciphertext):
+        return self._code(ciphertext, separate_character)
+
+def combine_character(plain, keyword):
+    plain = plain.upper()
+    keyword = keyword.upper()
+    plain_num = ord(plain) - ord("A")
+    keyword_num = ord(keyword) - ord("A")
+    return chr(ord("A") + (plain_num + keyword_num) % 26)
+
+def separate_character(cypher, keyword):
+    cypher = cypher.upper()
+    keyword = keyword.upper()
+    cypher_num = ord(cypher) - ord("A")
+    keyword_num = ord(keyword) - ord("A")
+    return chr(ord("A") + (cypher_num - keyword_num) % 26)
+#+END_SRC
+
+* Guide
+
+Think carefully about the values that are somehow different, such as the following, for example:
+
+- empty lists when you expect full ones
+- negative numbers, zero, one, or infinity compared to positive integers
+- floats that don't round to an exact decimal place
+- strings when you expected numerals
+- unicode strings when you expected ASCII
+- the None value when you expected something meaningful

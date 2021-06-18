@@ -283,11 +283,266 @@ ip_map = {
     b"dataquest.io.": "104.20.20.199"
 }
 
-# def lookup_dns(data):
-#     domain = b""
-#     pointer, part_length = 13, data[12]
-#     while part_length:
-#         domain +=
+
+def lookup_dns(data):
+    domain = b""
+    pointer, part_length = 13, data[12]
+    while part_length:
+        domain += data[pointer:pointer + part_length] + b"."
+        pointer += part_length + 1
+        part_length = data[pointer - 1]
+    ip = ip_map.get(domain, "127.0.0.1")
+    return domain, ip
 
 
+def create_response(data, ip):
+    ba = bytearray
+    packet = ba(data[:2]) + ba([129, 128]) + data[4:6] * 2
+    packet += ba(4) + data[12:]
+    packet += ba([192, 12, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4])
+    for x in ip.split("."):
+        packet.append(int(x))
+    return packet
+
+
+class DNSProtocol(asyncio.DatagramProtocol):
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        print(f"Received request from {addr[0]}")
+        domain, ip = lookup_dns(data)
+        print(f"Sending IP {domain.decode()} for {ip} to {addr[0]}")
+        self.transport.sendto(create_response(data, ip), addr)
+
+loop = asyncio.get_event_loop()
+transport, protocol = loop.run_until_complete(
+    loop.create_datagram_endpoint(
+        DNSProtocol, local_addr = ("127.0.0.1", 4343)
+    )
+)
+print("DNS Server Running")
+
+with suppress(KeyboardInterrupt):
+    loop.run_forever()
+transport.close()
+loop.close()
+#+END_SRC
+
+* Using Executors to Wrap Blocking Code
+
+AsyncIO provides its own version of the futures library to allow us to run code in a separate thread or process when there isn't an appropriate non-blocking call to be made.
+This allows us to combine threads and processes with the asynchronous model. This is the best of both worlds when an application has bursts of I/O-bound and CPU-bound activity. The IO bound portions can happen in an event loop, while the CPU intensive work can be spun off to a different process.
+
+Let's implement sorting as a service using AsyncIO:
+
+#+BEGIN_SRC python :tangle saas.py
+import asyncio
+import json
+from concurrent.futures import ProcessPoolExecutor
+
+
+def sort_in_process(data):
+    """gnome sort"""
+    nums = json.loads(data.decode())
+    curr = 1
+    while curr < len(nums):
+        if nums[curr] >= nums[curr - 1]:
+            curr += 1
+        else:
+            nums[curr], nums[curr - 1] = nums[curr - 1], nums[curr]
+            if curr > 1:
+                curr -= 1
+    return json.dumps(nums).encode()
+
+
+async def sort_request(reader, writer):
+    print("Received Connection")
+    length = await reader.read(8)
+    data = await reader.readexactly(int.from_bytes(length, "big"))
+    result = await asyncio.get_event_loop().run_in_executor(None, sort_in_process, data)
+    print("Sorted list")
+    writer.write(result)
+    writer.close()
+    print("Connection Closed")
+
+
+loop = asyncio.get_event_loop()
+loop.set_default_executor(ProcessPoolExecutor())
+server = loop.run_until_complete(asyncio.start_server(sort_request, "127.0.0.1", 2015))
+print("Sort Service Running")
+
+loop.run_forever()
+server.close()
+loop.run_until_complete(server.wait_closed())
+loop.close()
+#+END_SRC
+
+* AsyncIO Clients
+
+AsyncIO is very common for implementing servers, but it is a generic networking library and provides full support for client processes as well.
+Clients can be much simpler than servers, as they don't have to be set up to wait for incoming connections.
+
+#+BEGIN_SRC python :tangle asio_client.py
+import asyncio
+import random
+import json
+
+async def remote_sort():
+    reader, writer = await asyncio.open_connection("127.0.0.1", 2015)
+    print("Generating random list")
+    numbers = [random.randrange(10000) for r in range(10000)]
+    data = json.dumps(numbers).encode()
+    print("List generated, sending data")
+    writer.write(len(data).to_bytes(8, "big"))
+    writer.write(data)
+    print("Waiting for data")
+    data = await reader.readexactly(len(data))
+    print("Received data")
+    sorted_values = json.loads(data.decode())
+    print(sorted_values, "\n")
+    writer.close()
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(remote_sort())
+loop.close()
+#+END_SRC
+
+* Case Study
+
+We will build a basic image compression tool. It will take black and white images and attempt to compress it using a very basic form of compression known as run-length encoding.
+
+Run-length encoding takes a sequence of bits and replaces any strings of repeated bits with the number of bits that are repeated. For example, the string 000011000 might be replaced with 04 12 03.
+
+Before we start designing a concurrent system to build such compressed images, we should ask a fundamental question: Is this application I/O bound or CPU-bound?
+
+#+BEGIN_SRC python :tangle compress_image.py
+from bitarray import bitarray
+from PIL import Image
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+import sys
+
+
+def compress_chunk(chunk: bitarray) -> bytearray:
+    """
+    start with code that compresses a 127-bit chunk using run-length encoding
+    """
+    print("Compressing chunk")
+    compressed = bytearray()
+    count = 1
+    last = chunk[0]
+    for bit in chunk[1:]:
+        if bit != last:
+            compressed.append(count | (128 * last))
+            count = 0
+            last = bit
+        count += 1
+    compressed.append(count | (128 * last))
+    return compressed
+
+
+def compress_row(row: bitarray) -> bytearray:
+    """
+    compress a row of image data
+    """
+    print("Compressing row")
+    compressed = bytearray()
+    chunks = split_bits(row, 127)
+    for chunk in chunks:
+        compressed.extend(compress_chunk(chunk))
+    return compressed
+
+
+def split_bits(bits, width):
+    """generator that splits bits into width length chunks"""
+    print("splitting bits")
+    for i in range(0, len(bits), width):
+        yield bits[i:i+width]
+
+
+def compress_in_executor(executor, bits, width):
+    """
+    run everything in a provided executor
+    """
+    print("Splitting into processes")
+    row_compressors = []
+    for row in split_bits(bits, width):
+        compressor = executor.submit(compress_row, row)
+        row_compressors.append(compressor)
+
+    compressed = bytearray()
+    for compressor in row_compressors:
+        compressed.extend(compressor.result())
+    return compressed
+
+
+def compress_image(in_filename, out_filename, executor=None):
+    """
+    loads an image file, converts it to bits, and compresses it
+    """
+    print("Compressing image")
+    executor = executor if executor else ProcessPoolExecutor()
+    with Image.open(in_filename) as image:
+        bits = bitarray(image.convert('1').getdata())
+        width, height = image.size
+
+    compressed = compress_in_executor(executor, bits, width)
+
+    with open(out_filename, 'wb') as file:
+        file.write(width.to_bytes(2, 'little'))
+        file.write(height.to_bytes(2, 'little'))
+        file.write(compressed)
+
+
+def single_image_main():
+    print("runnin' and gunnin'")
+    in_filename, out_filename = sys.argv[1:3]
+    #executor = ThreadPoolExecutor(4)
+    executor = ProcessPoolExecutor()
+    compress_image(in_filename, out_filename, executor)
+
+
+# extend to compress all bitmaps in a directory in parallel
+# this is not good code, since it splits and then splits again
+def compress_dir(in_dir, out_dir):
+    if not out_dir.exists():
+        out_dir.mkdir()
+
+    executor = ProcessPoolExecutor()
+    for file in (f for f in in_dir.iterdir() if f.suffix == '.bmp'):
+        out_file = (out_dir / file.name).with_suffix(".rle")
+        executor.submit(compress_image, str(file), str(out_file))
+
+
+def dir_images_main():
+    in_dir, out_dir = (Path(p) for p in sys.argv[1:3])
+    compress_dir(in_dir, out_dir)
+
+# decompress an image
+def decompress(width, height, bytes):
+    image = Image.new('1', (width, height))
+
+    col, row = 0, 0
+    for byte in bytes:
+        color = (byte & 128) >> 7
+        count = byte & ~128
+        for i in range(count):
+            image.putpixel((row, col), color)
+            row += 1
+        if not row % width:
+            col += 1
+            row = 0
+    return image
+
+
+# with open(sys.argv[1], 'rb') as file:
+#     width = int.from_bytes(file.read(2), 'little')
+#     height = int.from_bytes(file.read(2), 'little')
+#     image = decompress(width, height, file.read())
+#     image.save(sys.argv[2], 'bmp')
+
+
+if __name__ == '__main__':
+    single_image_main()
 #+END_SRC

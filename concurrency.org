@@ -137,3 +137,157 @@ if __name__ == '__main__':
 #+END_SRC
 
 * Queues
+
+If you need more control over communication between processes, we can use a queue.
+
+To illustrate queues, let's build a little search engine for text content that stores all relevant entries in memory.
+This search engine scans all files in the current directory in parallel. A process is constructed for each core in the CPU.
+Each of these is instructed to load some of the files into memory.
+
+#+BEGIN_SRC python :tangle mp_queue.py
+def search(paths, query_q, results_q):
+    """
+    Do the file loading and searching
+    """
+    lines = []
+    for path in paths:
+        lines.extend(l.strip() for l in path.open())
+    query = query_q.get()
+    while query:
+        results_q.put([l for l in lines if query in l])
+        query = query_q.get()
+
+
+if __name__ == '__main__':
+    from multiprocessing import Process, Queue, cpu_count
+    from path import Path
+    cpus = cpu_count()
+    pathnames = [f for f in Path(".").listdir() if f.isfile()]
+    paths = [pathnames[i::cpus] for i in range(cpus)]
+    query_queues = [Queue() for p in range(cpus)]
+    results_queue = Queue()
+    search_procs = [
+        Process(target=search, args=(p, q, results_queue))
+        for p, q in zip(paths, query_queues)
+    ]
+    for proc in search_procs:
+        proc.start()
+
+    for q in query_queues:
+        q.put("def")
+        q.put(None)  # signal process termination
+
+    for i in range(cpus):
+        for match in results_queue.get():
+            print(match)
+    for proc in search_procs:
+        proc.join()
+
+#+END_SRC
+
+* Futures
+
+Futures wrap either multiprocessing or threading depending on what kind of concurrency we need (tending toward I/O vs. tending toward CPU).
+
+
+A future is an object that wraps a function call. That function call is run in the background in a thread or process.
+The future object has methods the main thread can use to check whether the future has completed and to get the results after it has been completed.
+
+We will implement a simple version of the find command.
+The example will search the entire filesystem for paths that contain a given string of six characters, as follows:
+
+#+BEGIN_SRC python :tangle py_futures.py
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from os.path import sep as pathsep
+from collections import deque
+
+def find_files(path, query_string):
+    subdirs = []
+    for p in path.iterdir():
+        full_path = str(p.absolute())
+        if p.is_dir() and not p.is_symlink():
+            subdirs.append(p)
+        if query_string in full_path:
+            print(full_path)
+    return subdirs
+
+query = ".py"
+futures = deque()
+basedir = Path(pathsep).absolute()
+
+with ThreadPoolExecutor(max_workers=10) as executor:
+    futures.append(executor.submit(find_files, basedir, query))
+    while futures:
+        future = futures.popleft()
+        if future.exception():
+            continue
+        elif future.done():
+            subdirs = future.result()
+            for subdir in subdirs:
+                futures.append(executor.submit(find_files, subdir, query))
+        else:
+            futures.append(future)
+#+END_SRC
+
+* AsyncIO
+
+AsyncIO combines the concept of futures and an event loop with coroutines.
+It was mostly designed for network I/O. Most networking applications, especially on the server side,
+spend a lot of time waiting for data to come in from the network. This can be solved by handling each client in a separate thread,
+but threads use up memory and other resources. AsyncIO uses coroutines as a sort of lightweight thread.
+
+The library provides its own event loop, obviating the need for using a while loop like above.
+When we run code in an async task on the event loop, that code must return immediately, blocking neither on I/O nor on longrunning calculations.
+
+* AsyncIO in action
+
+A canonical example of a blocking function is the time.sleep call.
+
+#+BEGIN_SRC python
+import asyncio
+import random
+
+async def random_sleep(counter):
+    delay = random.random() * 5
+    print(f"{counter} sleeps for {delay:.2f}")
+    await asyncio.sleep(delay)
+    print(f"{counter} awakens")
+
+
+async def five_sleepers():
+    print("Creating 5 tasks")
+    tasks = [asyncio.create_task(random_sleep(i)) for i in range(5)]
+    print("Sleeping after starting 5 tasks")
+    await asyncio.sleep(2)
+    print("Waking and waiting for 5 tasks")
+    await asyncio.gather(*tasks)
+
+
+asyncio.get_event_loop().run_until_complete(five_sleepers())
+print("done five tasks")
+#+END_SRC
+
+* AsyncIO for Networking
+
+AsyncIO was specifically designed for use with network sockets, so let's implement a DNS server.
+
+#+BEGIN_SRC python
+import asyncio
+from contextlib import suppress
+
+ip_map = {
+    b"facebook.com.": "173.252.120.6",
+    b"yougov.com.": "213.52.133.246",
+    b"wipo.int.": "193.5.93.80",
+    b"dataquest.io.": "104.20.20.199"
+}
+
+# def lookup_dns(data):
+#     domain = b""
+#     pointer, part_length = 13, data[12]
+#     while part_length:
+#         domain +=
+
+
+#+END_SRC
